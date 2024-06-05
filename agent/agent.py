@@ -1,5 +1,6 @@
 """General Agent that creates a thread for each agent and module and runs them"""
 
+# pylint: disable=import-error
 import time
 import os
 import logger
@@ -16,9 +17,10 @@ LOGGER = logger.get_module_logger(__name__)
 
 
 class Agent:
-    """General Agent that creates a thread for each agent and module and runs them"""
+    """General Agent that creates a thread for each agent and module and runs them."""
 
     def __init__(self):
+        """Initialize the agent and all modules."""
         self.__agent_location = os.environ.get("AGENT_LOCATION")
         self.__agent_type = os.environ.get("AGENT_TYPE")
         self._mqtt = mqtt_agent.MqttAgent(
@@ -41,6 +43,7 @@ class Agent:
             module.run()
 
     def _select_agent(self):
+        """Select the agent based on the agent type."""
         if self.__agent_type == "doorbell":
 
             self._agent = doorbell_agent.DoorbellAgent(self._mqtt)
@@ -52,6 +55,7 @@ class Agent:
             raise NameError(msg)
 
     def _select_modules(self):
+        """Select the modules based on the modules provided in the environment variables."""
         self.__modules = list(os.environ.get("MODULES").split(","))
 
         for module in self.__modules:

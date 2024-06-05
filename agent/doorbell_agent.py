@@ -1,5 +1,6 @@
 """Button Agent that listens to button presses and publishes messages to the broker."""
 
+# pylint: disable=import-error
 import os
 import time
 import threading
@@ -18,6 +19,7 @@ class DoorbellAgent(base.BaseAgent):
     """Button Agent that listens to button presses and publishes messages to the broker."""
 
     def __init__(self, mqtt_client):
+        """Initialize the agent with the MQTT client."""
         super().__init__(mqtt_client)
         self._location_topic = f"{self._mqtt_topic}/{self._agent_location}"
 
@@ -49,7 +51,11 @@ class DoorbellAgent(base.BaseAgent):
             LOGGER.error("Failed to initialize button-listeners: %s", str(e))
 
     def button_listener(self, floor_name, pin):
-        """Listen for button presses and publish a message to the broker when a button is pressed."""
+        """Listen for button presses and publish a message to the broker when a button is pressed.
+
+        param floor_name: The name of the floor the button is located on.
+        param pin: The GPIO pin the button is connected to.
+        """
         button = gpiozero.Button(
             pin, pull_up=os.environ.get("PIN_PULL_UP_MODE") == "True"
         )
@@ -68,9 +74,19 @@ class DoorbellAgent(base.BaseAgent):
 
     # pylint: disable=unused-argument
     def _on_doorbell_message(self, client, userdata, msg):
+        """Process the doorbell message.
+
+        param client: The client instance for this callback.
+        param userdata: The private user data as set in Client() or userdata_set().
+        param msg: An instance of MQTTMessage.
+        """
         LOGGER.info("Mqtt message received: %s", msg.payload.decode("utf-8"))
 
     def _on_button_pressed(self, floor_name):
+        """Publish a message to the broker when a button is pressed.
+
+        param floor_name: The name of the floor the button is located on.
+        """
         LOGGER.info(
             "%s: Button %s pressed at %s",
             self._agent_location,
@@ -91,7 +107,10 @@ class DoorbellAgent(base.BaseAgent):
 
     @staticmethod
     def check_press_trigger(last_pressed):
-        """Check if the button press is a trigger or a bounce."""
+        """Check if the button press is a trigger or a bounce.
+
+        param last_pressed: The last time the button was pressed.
+        """
         if (datetime.datetime.now() - last_pressed).total_seconds() < 5:
             return True
         return False
