@@ -1,0 +1,14 @@
+[Unit]
+Description=Doorbell Agent Service
+After=network.target
+
+[Service]
+ExecStart=/path/to/your/venv/bin/python /path/to/your/script.py
+WorkingDirectory=/path/to/your/script
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=your_user
+
+[Install]
+WantedBy=multi-user.target

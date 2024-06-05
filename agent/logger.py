@@ -1,3 +1,6 @@
+"""Logger module"""
+
+# pylint: disable=import-error
 import logging
 import logging.handlers
 import os
@@ -9,7 +12,6 @@ def get_module_logger(mod_name: str) -> logging.Logger:
     :param mod_name: module name
     :return: logger
     :rtype: logging.Logger
-
     """
 
     logger = logging.getLogger(mod_name)
