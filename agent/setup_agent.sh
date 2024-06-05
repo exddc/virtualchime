@@ -27,7 +27,6 @@ while true; do
         echo "Invalid selection. Please enter 'en' or 'de'."
     fi
 done
-echo "You selected: $LANGUAGE"
 
 # Property name
 echo "The property name is the name of the property the doorbell is installed at. I.e. 'Home', 'Office' or 'Street name 123'"
@@ -74,6 +73,7 @@ fi
 echo "Creating the systemd service"
 cp doorbell.service /etc/systemd/system/doorbell.service
 sed -i "s|ExecStart=/path/to/your/venv/bin/python /path/to/your/script.py|ExecStart=$(pwd)/.venv/bin/python $(pwd)/doorbell.py|g" /etc/systemd/system/doorbell.service
+sed -i "s|WorkingDirectory=/path/to/your/script|WorkingDirectory=$(pwd)|g" /etc/systemd/system/doorbell.service
 sed -i "s|/path/to/doorbell|$(pwd)|g" /etc/systemd/system/doorbell.service
 sed -i "s|User=your_user|User=$(whoami)|g" /etc/systemd/system/doorbell.service
 
