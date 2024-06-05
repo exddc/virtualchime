@@ -14,6 +14,7 @@ dotenv.load_dotenv()
 LOGGER = logger.get_module_logger(__name__)
 
 
+# pylint: disable=too-few-public-methods
 class IndoorUnitAgent:
     """Indoor Unit Agent that plays a sound on doorbell ring."""
 

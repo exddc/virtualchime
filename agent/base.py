@@ -22,6 +22,7 @@ else:
     gpiozero.Device.pin_factory = RPiGPIOFactory()
 
 
+# pylint: disable=too-few-public-methods
 class BaseAgent:
     """Base class for all agents."""
 
