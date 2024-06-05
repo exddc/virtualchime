@@ -17,6 +17,18 @@ pip install -r requirements.txt
 deactivate
 
 # Create a config file from user inputs
+# Check if .env already exists
+if [ -f .env ]; then
+    echo ".env file already exists. Do you want to overwrite it?"
+    read -rn1 -p "Overwrite .env? (y/n): " OVERWRITE
+    if [ "$OVERWRITE" == "n" ]; then
+        echo "Exiting setup"
+        exit 0
+    fi
+
+    # Remove the existing .env file
+    rm .env
+fi
 
 # Language
 while true; do
@@ -71,6 +83,19 @@ fi
 
 # Create a systemd service
 echo "Creating the systemd service"
+# Check if the service already exists
+if [ -f /etc/systemd/system/doorbell.service ]; then
+    echo "doorbell.service already exists. Do you want to overwrite it?"
+    read -rn1 -p "Overwrite doorbell.service? (y/n): " OVERWRITE_SERVICE
+    if [ "$OVERWRITE_SERVICE" == "n" ]; then
+        echo "Exiting setup"
+        exit 0
+    fi
+
+    # Remove the existing service file
+    sudo rm /etc/systemd/system/doorbell.service
+fi
+
 cp doorbell.service /etc/systemd/system/doorbell.service
 sed -i "s|ExecStart=/path/to/your/venv/bin/python /path/to/your/script.py|ExecStart=$(pwd)/.venv/bin/python $(pwd)/doorbell.py|g" /etc/systemd/system/doorbell.service
 sed -i "s|WorkingDirectory=/path/to/your/script|WorkingDirectory=$(pwd)|g" /etc/systemd/system/doorbell.service
