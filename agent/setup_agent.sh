@@ -21,6 +21,7 @@ deactivate
 if [ -f .env ]; then
     echo ".env file already exists. Do you want to overwrite it?"
     read -rn1 -p "Overwrite .env? (y/n): " OVERWRITE
+    echo ""
     if [ "$OVERWRITE" == "n" ]; then
         echo "Exiting setup"
         exit 0
@@ -87,6 +88,7 @@ echo "Creating the systemd service"
 if [ -f /etc/systemd/system/doorbell.service ]; then
     echo "doorbell.service already exists. Do you want to overwrite it?"
     read -rn1 -p "Overwrite doorbell.service? (y/n): " OVERWRITE_SERVICE
+    echo ""
     if [ "$OVERWRITE_SERVICE" == "n" ]; then
         echo "Exiting setup"
         exit 0
