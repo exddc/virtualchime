@@ -5,11 +5,13 @@ echo "Welcome to the agent setup script"
 echo "This script will guide you through the setup of the agent"
 
 # Install needed packages
+echto "Install needed apt packages"
 sudo apt-get update
 sudo apt-get install -y dialog
 sudo apt-get install -y python3 python3-venv python3-pip
 
 # Install python packages
+echo "Installing python packages"
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -105,7 +107,7 @@ echo "Creating the systemd service"
 cp doorbell.service /etc/systemd/system/doorbell.service
 sed -i "s|ExecStart=/path/to/your/venv/bin/python /path/to/your/script.py|ExecStart=$(pwd)/.venv/bin/python $(pwd)/doorbell.py|g" /etc/systemd/system/doorbell.service
 sed -i "s|/path/to/doorbell|$(pwd)|g" /etc/systemd/system/doorbell.service
-sed -i "s|User=your_user/User=$USER|g" /etc/systemd/system/doorbell.service
+sed -i "s|User=your_user/User=$(whoami)|g" /etc/systemd/system/doorbell.service
 
 # Enable and start the service
 sudo systemctl enable doorbell
