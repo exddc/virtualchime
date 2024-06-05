@@ -99,7 +99,7 @@ if [ -f /etc/systemd/system/doorbell.service ]; then
 fi
 
 cp doorbell.service /etc/systemd/system/doorbell.service
-sed -i "s|ExecStart=/path/to/your/venv/bin/python /path/to/your/script.py|ExecStart=$(pwd)/.venv/bin/python $(pwd)/doorbell.py|g" /etc/systemd/system/doorbell.service
+sed -i "s|ExecStart=/path/to/your/venv/bin/python /path/to/your/script.py|ExecStart=$(pwd)/.venv/bin/python $(pwd)/agent.py|g" /etc/systemd/system/doorbell.service
 sed -i "s|WorkingDirectory=/path/to/your/script|WorkingDirectory=$(pwd)|g" /etc/systemd/system/doorbell.service
 sed -i "s|/path/to/doorbell|$(pwd)|g" /etc/systemd/system/doorbell.service
 sed -i "s|User=your_user|User=$(whoami)|g" /etc/systemd/system/doorbell.service
