@@ -12,6 +12,7 @@ import gpiozero
 LOGGER = logger.get_module_logger(__name__)
 
 
+# pylint: disable=too-few-public-methods
 class RelayAgent(base.BaseAgent):
     """Relay agent that listens to messages from the broker and switches the relays on or off."""
 

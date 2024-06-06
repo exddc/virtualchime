@@ -12,6 +12,7 @@ import base
 LOGGER = logger.get_module_logger(__name__)
 
 
+# pylint: disable=too-few-public-methods
 class RfidAgent(base.BaseAgent):
     """RFID agent module."""
 
