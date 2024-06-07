@@ -8,6 +8,7 @@ import dotenv
 import mqtt_agent
 import doorbell_agent
 import indoor_unit_agent
+import RPi.GPIO as GPIO
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -21,6 +22,7 @@ class Agent:
 
     def __init__(self):
         """Initialize the agent and all modules."""
+        GPIO.cleanup()
         self.__agent_location = os.environ.get("AGENT_LOCATION")
         self.__agent_type = os.environ.get("AGENT_TYPE")
         self._mqtt = mqtt_agent.MqttAgent(
