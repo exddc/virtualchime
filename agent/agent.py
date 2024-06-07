@@ -69,6 +69,11 @@ class Agent:
                 import rfid_agent
 
                 self._modules.append(rfid_agent.RfidAgent(self._mqtt))
+            elif module == "video":
+                # pylint: disable=import-outside-toplevel
+                import video_agent
+
+                self._modules.append(video_agent.VideoAgent(self._mqtt))
             else:
                 LOGGER.error(msg := "Unknown module")
                 raise NameError(msg)
