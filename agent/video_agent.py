@@ -51,6 +51,8 @@ class VideoAgent(base.BaseAgent):
         if not self._streaming:
             LOGGER.info("Starting video stream")
             self._camera = picamera2.Picamera2()
+            self._camera.configure(self._camera.create_preview_configuration())
+            self._camera.start()
             self._stream_server = threading.Thread(
                 target=self._video_stream_server, daemon=True
             )
@@ -61,6 +63,7 @@ class VideoAgent(base.BaseAgent):
         """Stop the video stream."""
         if self._streaming:
             LOGGER.info("Stopping video stream")
+            self._camera.stop()
             self._camera.close()
             self._streaming = False
             self._stream_server.join()
@@ -71,6 +74,7 @@ class VideoAgent(base.BaseAgent):
         class StreamingHandler(http.server.BaseHTTPRequestHandler):
             """Video stream handler."""
 
+            # pylint: disable=invalid-name
             def do_GET(self):
                 """Handle the GET request."""
                 LOGGER.info("Stream request received")
@@ -92,16 +96,9 @@ class VideoAgent(base.BaseAgent):
                     LOGGER.error("Streaming error: %s", e)
 
             def _stream_video(self):
-                """Stream the video."""
-                with picamera2.Picamera2() as camera:
-                    camera.configure(camera.create_preview_configuration())
-                    camera.start_recording()
-                    try:
-                        while True:
-                            frame = camera.capture_array()
-                            yield frame
-                    finally:
-                        camera.stop_recording()
+                while True:
+                    frame = self.server.camera.capture_buffer("jpeg")
+                    yield frame
 
         class StreamingServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
             """Video stream server."""
@@ -111,5 +108,7 @@ class VideoAgent(base.BaseAgent):
 
         address = ("", 8000)
         server = StreamingServer(address, StreamingHandler)
+        # pylint: disable=attribute-defined-outside-init
+        server.camera = self._camera
         LOGGER.info("Starting HTTP server on port %s", address[1])
         server.serve_forever()
