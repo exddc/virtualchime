@@ -4,7 +4,7 @@
 import threading
 import socketserver
 import http.server
-import picamera2
+from picamera2 import Picamera2, MappedArray, Preview
 import logger
 import base
 
@@ -50,8 +50,8 @@ class VideoAgent(base.BaseAgent):
         """Start the video stream."""
         if not self._streaming:
             LOGGER.info("Starting video stream")
-            self._camera = picamera2.Picamera2()
-            self._camera.configure(self._camera.create_preview_configuration())
+            self._camera = Picamera2()
+            self._camera.configure(self._camera.create_still_configuration())
             self._camera.start()
             self._stream_server = threading.Thread(
                 target=self._video_stream_server, daemon=True
@@ -96,12 +96,13 @@ class VideoAgent(base.BaseAgent):
                     LOGGER.error("Streaming error: %s", e)
 
             def _stream_video(self):
+                """Stream video frames."""
+                stream = self.server.camera.capture_buffer("main")
                 while True:
-                    frame = self.server.camera.capture_buffer("jpeg")
-                    yield frame
+                    yield stream.array
 
         class StreamingServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
-            """Video stream server."""
+            """Video stream server class."""
 
             allow_reuse_address = True
             daemon_threads = True
