@@ -1,6 +1,7 @@
 """Video Stream Agent."""
 
 # pylint: disable=import-error, broad-except
+import os
 import threading
 import time
 import io
@@ -72,16 +73,25 @@ class VideoStreamServer(threading.Thread):
 class VideoAgent(base.BaseAgent):
     """Video Stream Agent class."""
 
-    def __init__(self, mqtt_client, port=8000, record_time=10):
+    def __init__(self, mqtt_client):
         """Initialize the agent with the MQTT client and settings."""
         super().__init__(mqtt_client)
         self._streaming = False
-        self._port = port
-        self._record_time = record_time
+        self._port = int(os.environ.get("VIDEO_STREAM_PORT"))
+        self._record_time = int(os.environ.get("VIDEO_RECORDING_DURATION"))
         self._picamera = Picamera2()
         self._video_server = None
-        self._encoder = H264Encoder(bitrate=1000000)
-        self._output = FileOutput("recordings/video_recording.h264")
+        self._encoder = H264Encoder(bitrate=int(os.environ.get("VIDEO_BITRATE")))
+
+        recording_folder = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "recordings",
+        )
+
+        if not os.path.exists(recording_folder):
+            os.makedirs(recording_folder)
+
+        self._output = FileOutput(recording_folder + "/video_recording.h264")
 
     def run(self):
         """Subscribe to the mqtt topic and start listening for video messages."""
@@ -92,7 +102,8 @@ class VideoAgent(base.BaseAgent):
         )
         LOGGER.debug("Added callback for topic: video/%s", self._agent_location)
         LOGGER.info("%s listening", self._agent_location)
-        self._start_video_stream()  # Start the video stream automatically
+        if os.environ.get("VIDEO_AUTOSTART") == "True":
+            self._start_video_stream()
 
     # pylint: disable=unused-argument
     def _on_video_message(self, client, userdata, msg):
@@ -117,8 +128,14 @@ class VideoAgent(base.BaseAgent):
         try:
             self._picamera.configure(
                 self._picamera.create_video_configuration(
-                    main={"size": (1920, 1080), "format": "RGB888"},
-                    controls={"FrameRate": 30},
+                    main={
+                        "size": (
+                            int(os.environ.get("VIDEO_WIDTH")),
+                            int(os.environ.get("VIDEO_HEIGHT")),
+                        ),
+                        "format": "RGB888",
+                    },
+                    controls={"FrameRate": int(os.environ.get("VIDEO_FPS"))},
                 )
             )
             self._picamera.start_recording(

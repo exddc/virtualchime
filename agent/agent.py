@@ -1,6 +1,6 @@
 """General Agent that creates a thread for each agent and module and runs them"""
 
-# pylint: disable=import-error
+# pylint: disable=import-error, consider-using-from-import
 import time
 import os
 import logger
