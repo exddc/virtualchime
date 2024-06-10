@@ -12,10 +12,7 @@ sudo apt-get install -y python3-prctl libatlas-base-dev ffmpeg libopenjp2-7 pyth
 
 # Install python packages
 echo "Installing python packages"
-python3 -m venv .venv --system-site-packages
-source .venv/bin/activate
-pip install -r requirements.txt
-deactivate
+pip3 install -r requirements.txt --break-system-packages
 
 # Create a config file from user inputs
 # Check if .env already exists
