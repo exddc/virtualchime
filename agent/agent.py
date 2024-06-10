@@ -1,6 +1,6 @@
 """General Agent that creates a thread for each agent and module and runs them"""
 
-# pylint: disable=import-error
+# pylint: disable=import-error, consider-using-from-import
 import time
 import os
 import logger
@@ -8,6 +8,7 @@ import dotenv
 import mqtt_agent
 import doorbell_agent
 import indoor_unit_agent
+import RPi.GPIO as GPIO
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -21,6 +22,7 @@ class Agent:
 
     def __init__(self):
         """Initialize the agent and all modules."""
+        GPIO.cleanup()
         self.__agent_location = os.environ.get("AGENT_LOCATION")
         self.__agent_type = os.environ.get("AGENT_TYPE")
         self._mqtt = mqtt_agent.MqttAgent(
@@ -69,6 +71,11 @@ class Agent:
                 import rfid_agent
 
                 self._modules.append(rfid_agent.RfidAgent(self._mqtt))
+            elif module == "video":
+                # pylint: disable=import-outside-toplevel
+                import video_agent
+
+                self._modules.append(video_agent.VideoAgent(self._mqtt))
             else:
                 LOGGER.error(msg := "Unknown module")
                 raise NameError(msg)

@@ -7,14 +7,12 @@ echo "This script will guide you through the setup of the agent"
 # Install needed packages
 echo "Installing needed apt packages"
 sudo apt-get update
-sudo apt-get install -y python3 python3-venv python3-pip
+sudo apt-get install -y python3 python3-venv python3-pip python3-libcamera python3-kms++
+sudo apt-get install -y python3-prctl libatlas-base-dev ffmpeg libopenjp2-7 python3-pip
 
 # Install python packages
 echo "Installing python packages"
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-deactivate
+pip3 install -r requirements.txt --break-system-packages
 
 # Create a config file from user inputs
 # Check if .env already exists
