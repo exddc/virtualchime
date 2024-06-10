@@ -1,26 +1,87 @@
 """Video Stream Agent."""
 
-# pylint: disable=import-error
+# pylint: disable=import-error, broad-except
 import threading
-import socketserver
-import http.server
-from picamera2 import Picamera2, MappedArray, Preview
+import time
+import io
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import logger
 import base
+from picamera2 import Picamera2
+from picamera2.encoders import H264Encoder, Quality
+from picamera2.outputs import FileOutput
+from PIL import Image
 
 # Initialize logger
 LOGGER = logger.get_module_logger(__name__)
 
 
+class VideoStreamHandler(BaseHTTPRequestHandler):
+    """HTTP request handler for video streaming."""
+
+    # pylint: disable=invalid-name
+    def do_GET(self):
+        """Handle GET requests."""
+        if self.path == "/video_stream":
+            self.send_response(200)
+            self.send_header(
+                "Content-type", "multipart/x-mixed-replace; boundary=frame"
+            )
+            self.end_headers()
+            while True:
+                try:
+                    frame = self.server.video_stream.get_frame()
+                    if frame is not None:
+                        img = Image.fromarray(frame).convert("RGB")
+                        with io.BytesIO() as output:
+                            img.save(output, format="JPEG")
+                            frame_bytes = output.getvalue()
+                            self.wfile.write(b"--frame\r\n")
+                            self.send_header("Content-Type", "image/jpeg")
+                            self.send_header("Content-Length", len(frame_bytes))
+                            self.end_headers()
+                            self.wfile.write(frame_bytes)
+                            self.wfile.write(b"\r\n")
+                    time.sleep(0.1)
+                except Exception as e:
+                    LOGGER.error("Error streaming video: %s", e)
+                    break
+
+
+class VideoStreamServer(threading.Thread):
+    """HTTP server for video streaming."""
+
+    def __init__(self, port, video_stream):
+        super().__init__()
+        self.port = port
+        self.video_stream = video_stream
+        self.server = HTTPServer(("0.0.0.0", self.port), VideoStreamHandler)
+        self.server.video_stream = video_stream
+
+    def run(self):
+        LOGGER.info("Starting HTTP server on port %d", self.port)
+        self.server.serve_forever()
+
+    def stop(self):
+        """Stop the HTTP server."""
+        LOGGER.info("Stopping HTTP server")
+        self.server.shutdown()
+        self.server.server_close()
+
+
 class VideoAgent(base.BaseAgent):
     """Video Stream Agent class."""
 
-    def __init__(self, mqtt_client):
-        """Initialize the agent with the MQTT client."""
+    def __init__(self, mqtt_client, port=8000, record_time=10):
+        """Initialize the agent with the MQTT client and settings."""
         super().__init__(mqtt_client)
-        self._stream_server = None
-        self._camera = None
         self._streaming = False
+        self._port = port
+        self._record_time = record_time
+        self._picamera = Picamera2()
+        self._video_server = None
+        self._encoder = H264Encoder(bitrate=1000000)
+        self._output = FileOutput("recordings/video_recording.h264")
 
     def run(self):
         """Subscribe to the mqtt topic and start listening for video messages."""
@@ -31,6 +92,7 @@ class VideoAgent(base.BaseAgent):
         )
         LOGGER.debug("Added callback for topic: video/%s", self._agent_location)
         LOGGER.info("%s listening", self._agent_location)
+        self._start_video_stream()  # Start the video stream automatically
 
     # pylint: disable=unused-argument
     def _on_video_message(self, client, userdata, msg):
@@ -48,68 +110,45 @@ class VideoAgent(base.BaseAgent):
 
     def _start_video_stream(self):
         """Start the video stream."""
-        if not self._streaming:
-            LOGGER.info("Starting video stream")
-            self._camera = Picamera2()
-            self._camera.configure(self._camera.create_still_configuration())
-            self._camera.start()
-            self._stream_server = threading.Thread(
-                target=self._video_stream_server, daemon=True
+        if self._streaming:
+            LOGGER.warning("Video stream already running.")
+
+        LOGGER.info("Starting video stream")
+        try:
+            self._picamera.configure(
+                self._picamera.create_video_configuration(
+                    main={"size": (1920, 1080), "format": "RGB888"},
+                    controls={"FrameRate": 30},
+                )
             )
-            self._stream_server.start()
+            self._picamera.start_recording(
+                self._encoder, self._output, quality=Quality.HIGH
+            )
             self._streaming = True
+            self._video_server = VideoStreamServer(self._port, self)
+            self._video_server.start()
+        except Exception as e:
+            LOGGER.error("Failed to start video stream: %s", e)
+            self._streaming = False
 
     def _stop_video_stream(self):
         """Stop the video stream."""
         if self._streaming:
             LOGGER.info("Stopping video stream")
-            self._camera.stop()
-            self._camera.close()
-            self._streaming = False
-            self._stream_server.join()
+            try:
+                self._picamera.stop_recording()
+                self._streaming = False
+                if self._video_server:
+                    self._video_server.stop()
+                    self._video_server.join()
+            except Exception as e:
+                LOGGER.error("Failed to stop video stream: %s", e)
 
-    def _video_stream_server(self):
-        """Creates a video stream server."""
-
-        class StreamingHandler(http.server.BaseHTTPRequestHandler):
-            """Video stream handler."""
-
-            # pylint: disable=invalid-name
-            def do_GET(self):
-                """Handle the GET request."""
-                LOGGER.info("Stream request received")
-                self.send_response(200)
-                self.send_header(
-                    "Content-type", "multipart/x-mixed-replace; boundary=FRAME"
-                )
-                self.end_headers()
-                try:
-                    for frame in self._stream_video():
-                        self.wfile.write(b"--FRAME\r\n")
-                        self.send_header("Content-Type", "image/jpeg")
-                        self.send_header("Content-Length", len(frame))
-                        self.end_headers()
-                        self.wfile.write(frame)
-                        self.wfile.write(b"\r\n")
-                # pylint: disable=broad-except
-                except Exception as e:
-                    LOGGER.error("Streaming error: %s", e)
-
-            def _stream_video(self):
-                """Stream video frames."""
-                stream = self.server.camera.capture_buffer("main")
-                while True:
-                    yield stream.array
-
-        class StreamingServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
-            """Video stream server class."""
-
-            allow_reuse_address = True
-            daemon_threads = True
-
-        address = ("", 8000)
-        server = StreamingServer(address, StreamingHandler)
-        # pylint: disable=attribute-defined-outside-init
-        server.camera = self._camera
-        LOGGER.info("Starting HTTP server on port %s", address[1])
-        server.serve_forever()
+    def get_frame(self):
+        """Get the current frame from the video stream."""
+        try:
+            frame = self._picamera.capture_array()
+            return frame
+        except Exception as e:
+            LOGGER.error("Failed to capture frame: %s", e)
+            return None

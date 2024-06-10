@@ -6,3 +6,4 @@ spidev
 mfrc522
 numpy
 picamera2
+pillow
