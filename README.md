@@ -1,7 +1,5 @@
 # Virtual Chime Open Smart Doorbell System
 
-## Overview
-
 Virtual Chime is an open source smart doorbell system that allows you to see and talk to visitors at your front door from anywhere in the world. The system is built using a Raspberry Pi and a few other components. The system is designed to be easy to set up and use, and it can be easliy customized.
 
 It's designed to be a simple and affordable alternative to expensive designer doorbells. There should not be a compromise between security, privacy and good design. Virtual Chime aims to be as beautiful as designer doorbells, as secure as the most expensive security systems, and as private as your own home.
@@ -76,13 +74,13 @@ Once you have installed Git, you can checkout the code by running the following 
 
 ```bash
 git clone git@github.com:exddc/virtualchime.git
-cd virtualchime/agent
+cd virtualchime
 ```
 
 Once you have checked out the code, you can install the software by running the following command in the terminal and following the instructions:
 
 ```bash
-sudo ./setup_agent.sh
+sudo ./agent/setup.sh
 ```
 
 ### Configuration
