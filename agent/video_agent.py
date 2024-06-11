@@ -169,3 +169,12 @@ class VideoAgent(base.BaseAgent):
         except Exception as e:
             LOGGER.error("Failed to capture frame: %s", e)
             return None
+
+    def stop(self):
+        """Stop the agent."""
+        self._stop_video_stream()
+        self._picamera.close()
+        self._mqtt.stop()
+        self._mqtt.unsubscribe(f"video/{self._agent_location}")
+        self._mqtt.message_callback_remove(f"video/{self._agent_location}")
+        LOGGER.info("Video agent stopped.")
