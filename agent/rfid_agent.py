@@ -68,4 +68,4 @@ class RfidAgent(base.BaseAgent):
     def stop(self):
         """Stop the agent."""
         self._rfid_thread.join()
-        LOGGER.info("RFID: %s stopped", self._agent_location)
+        LOGGER.info("RFID agent stopped.")

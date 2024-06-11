@@ -85,4 +85,4 @@ class RelayAgent(base.BaseAgent):
         self._mqtt.stop()
         self._mqtt.unsubscribe(f"relay/{self._agent_location}")
         self._mqtt.message_callback_remove(f"relay/{self._agent_location}")
-        LOGGER.info("Agent stopped")
+        LOGGER.info("Relay agent stopped")
