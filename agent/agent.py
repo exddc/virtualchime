@@ -3,6 +3,8 @@
 # pylint: disable=import-error, consider-using-from-import
 import time
 import os
+import threading
+from pathlib import Path
 import logger
 import dotenv
 import mqtt_agent
@@ -12,6 +14,7 @@ import RPi.GPIO as GPIO
 
 # Load environment variables
 dotenv.load_dotenv()
+env_path = Path(".") / ".env"
 
 # Initialize logger
 LOGGER = logger.get_module_logger(__name__)
@@ -47,10 +50,8 @@ class Agent:
     def _select_agent(self):
         """Select the agent based on the agent type."""
         if self.__agent_type == "doorbell":
-
             self._agent = doorbell_agent.DoorbellAgent(self._mqtt)
         elif self.__agent_type == "indoor_unit":
-
             self._agent = indoor_unit_agent.IndoorUnitAgent(self._mqtt)
         else:
             LOGGER.error(msg := "Unknown agent type")
@@ -82,11 +83,44 @@ class Agent:
 
     def stop(self):
         """Stop the agent and all modules"""
+        for module in self._modules:
+            module.stop()
+        self._agent.stop()
+        self._mqtt.stop()
+        GPIO.cleanup()
+        LOGGER.info("%s agent stopped.", self.__agent_type)
+
+
+def watch_env_file(agent_instance):
+    """Watch the .env file for changes and reload the environment variables."""
+    last_mod_time = os.path.getmtime(env_path)
+
+    while True:
+        try:
+            current_mod_time = os.path.getmtime(env_path)
+            if current_mod_time != last_mod_time:
+                LOGGER.info(
+                    "Changes detected in .env file. Reloading and restarting agent..."
+                )
+                dotenv.load_dotenv(dotenv_path=env_path, override=True)
+                agent_instance.stop()  # Stop the current agent
+                agent_instance = Agent()  # Create a new instance of the agent
+                agent_instance.run()  # Run the new agent instance
+                last_mod_time = current_mod_time
+        # pylint: disable=broad-except
+        except Exception as ex:
+            LOGGER.error("Error watching .env file: %s", str(ex))
+        time.sleep(10)
 
 
 if __name__ == "__main__":
     agent = Agent()
     agent.run()
+
+    # Start a thread to watch the .env file
+    watcher_thread = threading.Thread(target=watch_env_file, args=(agent,))
+    watcher_thread.daemon = True
+    watcher_thread.start()
 
     # Keep main thread alive
     try:

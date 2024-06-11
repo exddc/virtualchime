@@ -114,3 +114,9 @@ class DoorbellAgent(base.BaseAgent):
         if (datetime.datetime.now() - last_pressed).total_seconds() < 5:
             return True
         return False
+
+    def stop(self):
+        """Stop the agent."""
+        self._mqtt.unsubscribe(self._location_topic)
+        self._mqtt.message_callback_remove(self._location_topic)
+        LOGGER.info("Agent stopped")

@@ -75,3 +75,11 @@ class IndoorUnitAgent:
         else:
             LOGGER.error("Unknown sound type")
             # add mqtt error message
+
+    def stop(self):
+        """Stop the agent."""
+        self._mqtt.stop()
+        self._mqtt.unsubscribe(f"doorbell/{self.__location}")
+        self._mqtt.message_callback_remove(f"doorbell/{self.__location}")
+        os.system("/usr/bin/killall aplay")
+        LOGGER.info("Agent stopped")

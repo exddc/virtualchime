@@ -79,3 +79,10 @@ class RelayAgent(base.BaseAgent):
 
         LOGGER.error("Relay %s not found", target_relay)
         return
+
+    def stop(self):
+        """Stop the agent."""
+        self._mqtt.stop()
+        self._mqtt.unsubscribe(f"relay/{self._agent_location}")
+        self._mqtt.message_callback_remove(f"relay/{self._agent_location}")
+        LOGGER.info("Relay agent stopped")

@@ -64,3 +64,8 @@ class RfidAgent(base.BaseAgent):
         # pylint: disable=broad-except
         except Exception as e:
             LOGGER.error("Failed to send RFID tag to server: %s", str(e))
+
+    def stop(self):
+        """Stop the agent."""
+        self._rfid_thread.join()
+        LOGGER.info("RFID agent stopped.")
