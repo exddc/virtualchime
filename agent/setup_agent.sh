@@ -1,6 +1,9 @@
 #!/bin/bash
 # Setup script to automate the initial setup of the agent
 
+# Change the current directory to the agent directory
+cd "$(dirname "$0")" || exit
+
 echo "Welcome to the agent setup script"
 echo "This script will guide you through the setup of the agent"
 

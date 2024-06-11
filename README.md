@@ -80,7 +80,7 @@ cd virtualchime
 Once you have checked out the code, you can install the software by running the following command in the terminal and following the instructions:
 
 ```bash
-sudo ./agent/setup.sh
+sudo ./agent/setup_agent.sh
 ```
 
 ### Configuration
