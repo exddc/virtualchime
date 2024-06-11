@@ -96,8 +96,11 @@ if [ -f /etc/systemd/system/doorbell.service ]; then
     sudo rm /etc/systemd/system/doorbell.service
 fi
 
+# Get the python3 path
+PYTHON_PATH=$(which python3)
+
 cp doorbell.service /etc/systemd/system/doorbell.service
-sed -i "s|ExecStart=/path/to/your/venv/bin/python /path/to/your/script.py|ExecStart=$(pwd)/.venv/bin/python $(pwd)/agent.py|g" /etc/systemd/system/doorbell.service
+sed -i "s|ExecStart=/path/to/python /path/to/your/script.py|ExecStart=$PYTHON_PATH $(pwd)/agent.py|g" /etc/systemd/system/doorbell.service
 sed -i "s|WorkingDirectory=/path/to/your/script|WorkingDirectory=$(pwd)|g" /etc/systemd/system/doorbell.service
 sed -i "s|/path/to/doorbell|$(pwd)|g" /etc/systemd/system/doorbell.service
 sed -i "s|User=your_user|User=$(whoami)|g" /etc/systemd/system/doorbell.service
