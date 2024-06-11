@@ -70,7 +70,7 @@ If you haven't already installed Git, you can do so by running the following com
 sudo apt-get install git
 ```
 
-Once you have installed Git, you can checkout the code by running the following command in the terminal:
+Once you have installed Git and added your ssh-credentials to GitHub, you can checkout the code by running the following command in the terminal:
 
 ```bash
 git clone git@github.com:exddc/virtualchime.git
