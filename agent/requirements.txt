@@ -7,3 +7,6 @@ mfrc522
 numpy
 picamera2
 pillow
+Flask
+Flask-Assets
+pytailwindcss
