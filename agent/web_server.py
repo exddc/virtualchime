@@ -1,5 +1,6 @@
 """Webserver for the doorbell."""
 
+# pylint: disable=import-error
 import os
 import dotenv
 from flask import Flask, render_template
@@ -42,6 +43,13 @@ class WebServer:
         @self.app.route("/")
         def index():
             return render_template("index.html")
+
+        @self.app.route("/get_stream")
+        def get_stream_url():
+            stream_url = (
+                f"http://localhost:{os.environ.get('VIDEO_STREAM_PORT')}/video_stream"
+            )
+            return render_template("video_stream.html", stream_url=stream_url)
 
     def run(self) -> None:
         """Run the webserver."""

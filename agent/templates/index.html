@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1 class="font-bold text-lg mx-auto w-fit mt-12">Doorbell</h1>
+<h1 class="font-bold text-lg mx-auto w-fit">Doorbell</h1>
+<div id="video-container" class="mt-6 mx-auto w-fit"
+ hx-get="/get_stream"
+ hx-trigger="load"
+ hx-target="#video-container" 
+      hx-swap="innerHTML"
+ >
+</div>
 {% endblock content %}
