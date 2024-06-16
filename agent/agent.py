@@ -5,12 +5,14 @@ import time
 import os
 import threading
 from pathlib import Path
+
+# import RPi.GPIO as GPIO
 import logger
 import dotenv
 import mqtt_agent
 import doorbell_agent
 import indoor_unit_agent
-import RPi.GPIO as GPIO
+import web_server
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -25,7 +27,7 @@ class Agent:
 
     def __init__(self):
         """Initialize the agent and all modules."""
-        GPIO.cleanup()
+        # GPIO.cleanup()
         self.__agent_location = os.environ.get("AGENT_LOCATION")
         self.__agent_type = os.environ.get("AGENT_TYPE")
         self._mqtt = mqtt_agent.MqttAgent(
@@ -39,6 +41,8 @@ class Agent:
         self._select_agent()
         self._select_modules()
 
+        self._web_server = web_server.WebServer(self._mqtt)
+
     def run(self):
         """Run the agent and all modules"""
 
@@ -46,6 +50,7 @@ class Agent:
         self._agent.run()
         for module in self._modules:
             module.run()
+        self._web_server.run()
 
     def _select_agent(self):
         """Select the agent based on the agent type."""

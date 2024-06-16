@@ -10,3 +10,4 @@ pillow
 Flask
 Flask-Assets
 pytailwindcss
+waitress
