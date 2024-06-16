@@ -6,3 +6,5 @@ __pycache__/
 logs/
 recordings/
 htmx.min.js
+.webassets-cache/
+.dist/
