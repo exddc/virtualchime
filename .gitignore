@@ -7,4 +7,4 @@ logs/
 recordings/
 htmx.min.js
 .webassets-cache/
-.dist/
+dist/
