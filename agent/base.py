@@ -4,7 +4,8 @@
 import os
 import dotenv
 import logger
-import gpiozero
+
+# import gpiozero
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -12,7 +13,7 @@ dotenv.load_dotenv()
 # Initialize logger
 LOGGER = logger.get_module_logger(__name__)
 
-if os.environ.get("PIN_TYPE") == "MOCK":
+""" if os.environ.get("PIN_TYPE") == "MOCK":
     from gpiozero.pins.mock import MockFactory
 
     gpiozero.Device.pin_factory = MockFactory()
@@ -20,6 +21,7 @@ else:
     from gpiozero.pins.rpigpio import RPiGPIOFactory
 
     gpiozero.Device.pin_factory = RPiGPIOFactory()
+ """
 
 
 # pylint: disable=too-few-public-methods

@@ -43,7 +43,7 @@ class VideoStreamHandler(BaseHTTPRequestHandler):
                             self.end_headers()
                             self.wfile.write(frame_bytes)
                             self.wfile.write(b"\r\n")
-                    time.sleep(0.1)
+                    time.sleep(0.001)
                 except Exception as e:
                     LOGGER.error("Error streaming video: %s", e)
                     break
