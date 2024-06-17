@@ -47,9 +47,7 @@ class WebServer(base.BaseAgent):
 
         @self.app.route("/")
         def dashboard():
-            stream_url = (
-                f"http://localhost:{os.environ.get('VIDEO_STREAM_PORT')}/video_stream"
-            )
+            stream_url = f"http://{os.popen('hostname -I').read().split()[0]}:{os.environ.get('VIDEO_STREAM_PORT')}/video_stream"
             return render_template("dashboard.html", stream_url=stream_url)
 
         @self.app.route("/settings", methods=["GET", "POST"])
