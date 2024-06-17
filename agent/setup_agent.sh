@@ -94,6 +94,10 @@ if [ -f .env ]; then
     fi   
 fi
 
+# Tailwind CSS
+echo "Generating CSS files"
+tailwindcss -i ./static/src/style.css -o ./static/dist/style.css --minify
+
 # Create a systemd service
 echo "Creating the systemd service"
 # Check if the service already exists
@@ -102,31 +106,26 @@ if [ -f /etc/systemd/system/doorbell.service ]; then
     read -rn1 -p "Overwrite doorbell.service? (y/n): " OVERWRITE_SERVICE
     echo ""
     if [ "$OVERWRITE_SERVICE" == "y" ]; then
-        echo "Exiting setup"
-        exit 0
-    fi
+        # Remove the existing service file
+        sudo systemctl stop doorbell.service
+        sudo systemctl disable doorbell.service
+        sudo rm /etc/systemd/system/doorbell.service
 
-    # Remove the existing service file
-    sudo systemctl stop doorbell.service
-    sudo systemctl disable doorbell.service
-    sudo rm /etc/systemd/system/doorbell.service
+        # Get the python3 path
+        PYTHON_PATH=$(which python3)
+
+        cp doorbell.service /etc/systemd/system/doorbell.service
+        sed -i "s|ExecStart=/path/to/python /path/to/your/script.py|ExecStart=$PYTHON_PATH $(pwd)/agent.py|g" /etc/systemd/system/doorbell.service
+        sed -i "s|WorkingDirectory=/path/to/your/script|WorkingDirectory=$(pwd)|g" /etc/systemd/system/doorbell.service
+        sed -i "s|/path/to/doorbell|$(pwd)|g" /etc/systemd/system/doorbell.service
+        sed -i "s|User=your_user|User=$(whoami)|g" /etc/systemd/system/doorbell.service
+
+        # Enable and start the service
+        sudo systemctl enable doorbell
+        sudo systemctl start doorbell
+    fi
 fi
 
-# Tailwind CSS
-echo "Creating CSS files"
-tailwindcss -i ./static/src/style.css -o ./static/dist/style.css --minify
 
-# Get the python3 path
-PYTHON_PATH=$(which python3)
-
-cp doorbell.service /etc/systemd/system/doorbell.service
-sed -i "s|ExecStart=/path/to/python /path/to/your/script.py|ExecStart=$PYTHON_PATH $(pwd)/agent.py|g" /etc/systemd/system/doorbell.service
-sed -i "s|WorkingDirectory=/path/to/your/script|WorkingDirectory=$(pwd)|g" /etc/systemd/system/doorbell.service
-sed -i "s|/path/to/doorbell|$(pwd)|g" /etc/systemd/system/doorbell.service
-sed -i "s|User=your_user|User=$(whoami)|g" /etc/systemd/system/doorbell.service
-
-# Enable and start the service
-sudo systemctl enable doorbell
-sudo systemctl start doorbell
 
 echo "Setup complete"
