@@ -6,7 +6,7 @@ import os
 import threading
 from pathlib import Path
 
-# import RPi.GPIO as GPIO
+import RPi.GPIO as GPIO
 import logger
 import dotenv
 import mqtt_agent
@@ -27,7 +27,7 @@ class Agent:
 
     def __init__(self):
         """Initialize the agent and all modules."""
-        # GPIO.cleanup()
+        GPIO.cleanup()
         self.__agent_location = os.environ.get("AGENT_LOCATION")
         self.__agent_type = os.environ.get("AGENT_TYPE")
         self._mqtt = mqtt_agent.MqttAgent(
@@ -108,9 +108,9 @@ def watch_env_file(agent_instance):
                     "Changes detected in .env file. Reloading and restarting agent..."
                 )
                 dotenv.load_dotenv(dotenv_path=env_path, override=True)
-                agent_instance.stop()  # Stop the current agent
-                agent_instance = Agent()  # Create a new instance of the agent
-                agent_instance.run()  # Run the new agent instance
+                agent_instance.stop()
+                agent_instance = Agent()
+                agent_instance.run()
                 last_mod_time = current_mod_time
         # pylint: disable=broad-except
         except Exception as ex:
@@ -122,12 +122,10 @@ if __name__ == "__main__":
     agent = Agent()
     agent.run()
 
-    # Start a thread to watch the .env file
     watcher_thread = threading.Thread(target=watch_env_file, args=(agent,))
     watcher_thread.daemon = True
     watcher_thread.start()
 
-    # Keep main thread alive
     try:
         while True:
             time.sleep(1)

@@ -1,3 +1,5 @@
+"""Web server for the doorbell agent."""
+
 # pylint: disable=import-error
 import os
 import dotenv
@@ -142,7 +144,7 @@ class WebServer(base.BaseAgent):
                 if lines.index(line) < 4:
                     file.write(line)
                     continue
-                elif line.startswith("# "):
+                if line.startswith("# "):
                     section = line[2:].strip()
                     if lines[lines.index(line) - 1].strip() != "":
                         file.write("\n" + line if section else line)
@@ -168,7 +170,7 @@ class WebServer(base.BaseAgent):
         """Read the last N lines from a file."""
         if not os.path.exists(file_path):
             return ["Log file not found."]
-        elif os.stat(file_path).st_size == 0:
+        if os.stat(file_path).st_size == 0:
             return ["Log file is empty."]
 
         with open(file_path, "r", encoding="utf-8") as file:
