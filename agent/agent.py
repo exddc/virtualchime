@@ -114,11 +114,9 @@ class Agent:
                 if not self._has_internet:
                     LOGGER.info("Internet connection established.")
                 self._has_internet = True
-                self._mqtt.publish("internet_connection", "online")
             else:
                 self._has_internet = False
                 LOGGER.warning("No internet connection. Retrying in 60 seconds.")
-                self._mqtt.publish("internet_connection", "offline")
             time.sleep(60)
 
 
