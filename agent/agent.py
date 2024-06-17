@@ -47,7 +47,9 @@ class Agent:
     def run(self):
         """Run the agent and all modules"""
 
-        LOGGER.info("%s agent started with version: %s", self.__agent_type, __version__)
+        LOGGER.info(
+            "%s agent starting with version: %s", self.__agent_type, __version__
+        )
         self._agent.run()
         for module in self._modules:
             module.run()
@@ -66,6 +68,7 @@ class Agent:
     def _select_modules(self):
         """Select the modules based on the modules provided in the environment variables."""
         self.__modules = list(os.environ.get("MODULES").split(","))
+        LOGGER.debug("Modules selected: %s", self.__modules)
 
         for module in self.__modules:
             if module == "relay":
@@ -86,6 +89,7 @@ class Agent:
             else:
                 LOGGER.error(msg := "Unknown module")
                 raise NameError(msg)
+        LOGGER.debug("Modules loaded: %s", self._modules)
 
     def stop(self):
         """Stop the agent and all modules"""
@@ -110,6 +114,7 @@ def watch_env_file(agent_instance):
                 )
                 dotenv.load_dotenv(dotenv_path=env_path, override=True)
                 agent_instance.stop()
+                LOGGER.info("Agent stopped due to .env changes. Restarting...")
                 agent_instance = Agent()
                 agent_instance.run()
                 last_mod_time = current_mod_time

@@ -47,14 +47,17 @@ class WebServer(base.BaseAgent):
 
         @self.app.route("/")
         def dashboard():
+            LOGGER.info("Dashboard requested by %s", request.remote_addr)
             # pylint: disable=line-too-long
             stream_url = f"http://{os.popen('hostname -I').read().split()[0]}:{os.environ.get('VIDEO_STREAM_PORT')}/video_stream"
             return render_template("dashboard.html", stream_url=stream_url)
 
         @self.app.route("/settings", methods=["GET", "POST"])
         def settings():
+            LOGGER.info("Settings requested by %s", request.remote_addr)
             env_file_path = ".env"
             if request.method == "POST":
+                LOGGER.info("Updating settings.")
                 form_data = request.form.to_dict()
                 self.update_env_file(env_file_path, form_data)
                 dotenv.load_dotenv(env_file_path, override=True)
@@ -65,10 +68,12 @@ class WebServer(base.BaseAgent):
 
         @self.app.route("/logs", methods=["GET", "POST"])
         def logs():
+            LOGGER.info("Logs requested by %s", request.remote_addr)
             lines = int(request.form.get("lines", 25))
             log_file_path = "./logs/agent.log"
             logs = self.tail(log_file_path, lines)
             if request.headers.get("HX-Request"):
+                LOGGER.debug("Returning partial log view.")
                 return render_template("partials/log_view.html", logs=logs)
             return render_template("logs.html", logs=logs, selected_lines=lines)
 
@@ -129,6 +134,7 @@ class WebServer(base.BaseAgent):
                     }
                 )
 
+        LOGGER.info("Read .env file successfully.")
         return sections
 
     @staticmethod
@@ -164,12 +170,16 @@ class WebServer(base.BaseAgent):
                 else:
                     file.write(line)
 
+        LOGGER.info("Updated .env file successfully.")
+
     @staticmethod
     def tail(file_path, lines=25):
         """Read the last N lines from a file."""
         if not os.path.exists(file_path):
+            LOGGER.error("Log file not found.")
             return ["Log file not found."]
         if os.stat(file_path).st_size == 0:
+            LOGGER.error("Log file is empty.")
             return ["Log file is empty."]
 
         with open(file_path, "r", encoding="utf-8") as file:

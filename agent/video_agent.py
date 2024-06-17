@@ -24,6 +24,7 @@ class VideoStreamHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         """Handle GET requests."""
         if self.path == "/video_stream":
+            LOGGER.info("Received video stream request")
             self.send_response(200)
             self.send_header(
                 "Content-type", "multipart/x-mixed-replace; boundary=frame"
@@ -90,6 +91,7 @@ class VideoAgent(base.BaseAgent):
 
         if not os.path.exists(recording_folder):
             os.makedirs(recording_folder)
+            LOGGER.info("Created recording folder: %s", recording_folder)
 
         self._output = FileOutput(recording_folder + "/video_recording.h264")
 
@@ -101,8 +103,9 @@ class VideoAgent(base.BaseAgent):
             f"video/{self._agent_location}", self._on_video_message
         )
         LOGGER.debug("Added callback for topic: video/%s", self._agent_location)
-        LOGGER.info("%s listening", self._agent_location)
+        LOGGER.info("Video Agent %s listening", self._agent_location)
         if os.environ.get("VIDEO_AUTOSTART") == "True":
+            LOGGER.info("Autostarting video stream")
             self._start_video_stream()
 
     # pylint: disable=unused-argument
