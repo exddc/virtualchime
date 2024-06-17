@@ -15,6 +15,7 @@ The system is still in the early stages of development, but here are some of the
 -   Video recording
 -   3D printable enclosure
 -   Support for multiple doorbells
+-   Web interface for configuration and monitoring
 
 Here are some of the features that are planned for the future:
 
@@ -27,7 +28,6 @@ Here are some of the features that are planned for the future:
 -   Integration with messaging services (e.g. Telegram, WhatsApp, Signal)
 -   Integration with voice assistants (e.g. Google Assistant, Alexa, Siri)
 -   Native mobile apps for iOS and Android
--   Web interface for configuration and monitoring
 -   Self-hosted version for maximum privacy
 -   Integration with other open source projects (e.g. Homebridge, OpenCV, TensorFlow)
 
