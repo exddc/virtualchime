@@ -23,6 +23,7 @@ env_path = Path(".") / ".env"
 LOGGER = logger.get_module_logger(__name__)
 
 
+# pylint: disable=too-many-instance-attributes
 class Agent:
     """General Agent that creates a thread for each agent and module and runs them."""
 
