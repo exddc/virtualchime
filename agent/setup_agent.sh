@@ -19,7 +19,7 @@ pip3 install -r requirements.txt --break-system-packages
 
 # Download htmx and save it to the static folder
 echo "Downloading htmx"
-wget -O static/htmx.min.js https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js
+wget -O static/src/htmx.min.js https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js
 
 # Create a config file from user inputs
 # Check if .env already exists
@@ -107,7 +107,7 @@ fi
 PYTHON_PATH=$(which python3)
 
 cp doorbell.service /etc/systemd/system/doorbell.service
-sed -i "s|ExecStart=/path/to/python /path/to/your/script.py|ExecStart=$PYTHON_PATH $(pwd)/agent.py|g" /etc/systemd/system/doorbell.service
+sed -i "s|ExecStart=/path/to/python /path/to/your/script.py|ExecStart=tailwindcss -i $(pwd)/static/src/style.css -o $(pwd)/static/dist/style.css --minify && $PYTHON_PATH $(pwd)/agent.py|g" /etc/systemd/system/doorbell.service
 sed -i "s|WorkingDirectory=/path/to/your/script|WorkingDirectory=$(pwd)|g" /etc/systemd/system/doorbell.service
 sed -i "s|/path/to/doorbell|$(pwd)|g" /etc/systemd/system/doorbell.service
 sed -i "s|User=your_user|User=$(whoami)|g" /etc/systemd/system/doorbell.service

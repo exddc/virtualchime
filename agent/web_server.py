@@ -5,6 +5,7 @@ import os
 import dotenv
 from flask import Flask, render_template, request, redirect, url_for
 from flask_assets import Environment, Bundle
+import waitress
 import base
 import logger
 
@@ -80,8 +81,7 @@ class WebServer(base.BaseAgent):
             self._on_doorbell_message,
         )
         LOGGER.info("Webserver subscribed to MQTT topic: %s", self._location_topic)
-        self.app.run(host="0.0.0.0", port=self._port)
-        # waitress.serve(self.app, host="0.0.0.0", port=self._port)
+        waitress.serve(self.app, host="0.0.0.0", port=self._port)
         LOGGER.info("Webserver started on port %i.", self._port)
 
     # pylint: disable=unused-argument
