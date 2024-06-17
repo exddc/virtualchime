@@ -42,6 +42,8 @@ class WebServer(base.BaseAgent):
         # Register routes
         self._setup_routes()
 
+        self._web_server = None
+
     def _setup_routes(self) -> None:
         """Setup routes for the webserver."""
 
@@ -85,8 +87,16 @@ class WebServer(base.BaseAgent):
             self._on_doorbell_message,
         )
         LOGGER.info("Webserver subscribed to MQTT topic: %s", self._location_topic)
-        waitress.serve(self.app, host="0.0.0.0", port=self._port)
+        self._web_server = waitress.serve(self.app, host="0.0.0.0", port=self._port)
         LOGGER.info("Webserver started on port %i.", self._port)
+
+    def stop(self) -> None:
+        """Stop the webserver."""
+        self._web_server.close()
+        self._mqtt.unsubscribe(self._location_topic)
+        LOGGER.info("Webserver unsubscribed from MQTT topic: %s", self._location_topic)
+        self._mqtt.message_callback_remove(self._location_topic)
+        LOGGER.info("Webserver stopped.")
 
     # pylint: disable=unused-argument
     def _on_doorbell_message(self, client, userdata, msg):

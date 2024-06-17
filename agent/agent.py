@@ -37,12 +37,16 @@ class Agent:
         )
         self._agent = None
         self._modules = []
+        self._has_internet = False
 
         self._mqtt.start()
         self._select_agent()
         self._select_modules()
 
         self._web_server = web_server.WebServer(self._mqtt)
+        self._internet_connection = threading.Thread(
+            target=self._check_internet_connection, daemon=True
+        )
 
     def run(self):
         """Run the agent and all modules"""
@@ -53,6 +57,7 @@ class Agent:
         self._agent.run()
         for module in self._modules:
             module.run()
+        self._internet_connection.start()
         self._web_server.run()
 
     def _select_agent(self):
@@ -97,8 +102,24 @@ class Agent:
             module.stop()
         self._agent.stop()
         self._mqtt.stop()
+        self._web_server.stop()
+        self._internet_connection.join()
         GPIO.cleanup()
-        LOGGER.info("%s agent stopped.", self.__agent_type)
+        LOGGER.info("%s %s agent stopped.", self.__agent_type, self.__agent_location)
+
+    def _check_internet_connection(self):
+        """Thread to check the internet connection and publish the status to the MQTT broker."""
+        while True:
+            if os.system("ping -c 1 www.google.com") == 0:
+                if not self._has_internet:
+                    LOGGER.info("Internet connection established.")
+                self._has_internet = True
+                self._mqtt.publish("internet_connection", "online")
+            else:
+                self._has_internet = False
+                LOGGER.warning("No internet connection. Retrying in 60 seconds.")
+                self._mqtt.publish("internet_connection", "offline")
+            time.sleep(60)
 
 
 def watch_env_file(agent_instance):
