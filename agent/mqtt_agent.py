@@ -9,6 +9,7 @@ import json
 import logger
 import dotenv
 import paho.mqtt.client
+from . import __version__
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -187,7 +188,11 @@ class MqttAgent(paho.mqtt.client.Client):
                 self.publish(
                     f"status/{os.environ.get('AGENT_LOCATION')}",
                     json.dumps(
-                        {"state": "online", "date": datetime.datetime.now().isoformat()}
+                        {
+                            "state": "online",
+                            "date": datetime.datetime.now().isoformat(),
+                            "version": __version__,
+                        }
                     ),
                     False,
                 )

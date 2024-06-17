@@ -13,6 +13,7 @@ import mqtt_agent
 import doorbell_agent
 import indoor_unit_agent
 import web_server
+from . import __version__
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -46,7 +47,7 @@ class Agent:
     def run(self):
         """Run the agent and all modules"""
 
-        LOGGER.info("%s agent started.", self.__agent_type)
+        LOGGER.info("%s agent started with version: %s", self.__agent_type, __version__)
         self._agent.run()
         for module in self._modules:
             module.run()
