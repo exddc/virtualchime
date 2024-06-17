@@ -125,19 +125,24 @@ def watch_env_file(agent_instance):
 
 
 if __name__ == "__main__":
-    agent = Agent()
-    agent.run()
+    while True:
+        try:
+            agent = Agent()
+            agent.run()
 
-    watcher_thread = threading.Thread(target=watch_env_file, args=(agent,))
-    watcher_thread.daemon = True
-    watcher_thread.start()
+            watcher_thread = threading.Thread(target=watch_env_file, args=(agent,))
+            watcher_thread.daemon = True
+            watcher_thread.start()
 
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        agent.stop()
-    # pylint: disable=broad-except
-    except Exception as e:
-        LOGGER.error("Agent failed: %s", str(e))
-        agent.stop()
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            LOGGER.info("KeyboardInterrupt received. Stopping agent.")
+            agent.stop()
+            break
+        # pylint: disable=broad-except
+        except Exception as e:
+            LOGGER.error("Agent failed: %s", str(e))
+            agent.stop()
+            LOGGER.info("Restarting agent...")
+            time.sleep(0.5)
