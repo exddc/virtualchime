@@ -102,26 +102,27 @@ if [ -f /etc/systemd/system/doorbell.service ]; then
     read -rn1 -p "Overwrite doorbell.service? (y/n): " OVERWRITE_SERVICE
     echo ""
     if [ "$OVERWRITE_SERVICE" == "y" ]; then
-        # Remove the existing service file
-        sudo rm /etc/systemd/system/doorbell.service
+        echo "Exiting setup"
+        exit 0
+    fi
 
-        # Get the python3 path
-        PYTHON_PATH=$(which python3)
-
-        cp doorbell.service /etc/systemd/system/doorbell.service
-        sed -i "s|ExecStart=/path/to/python /path/to/your/script.py|ExecStart=tailwindcss -i $(pwd)/static/src/style.css -o $(pwd)/static/dist/style.css --minify && $PYTHON_PATH $(pwd)/agent.py|g" /etc/systemd/system/doorbell.service
-        sed -i "s|WorkingDirectory=/path/to/your/script|WorkingDirectory=$(pwd)|g" /etc/systemd/system/doorbell.service
-        sed -i "s|/path/to/doorbell|$(pwd)|g" /etc/systemd/system/doorbell.service
-        sed -i "s|User=your_user|User=$(whoami)|g" /etc/systemd/system/doorbell.service
-
-        # Enable and start the service
-        sudo systemctl enable doorbell
-        sudo systemctl start doorbell
-
-        else
-            echo "Restarting the service"
-            sudo systemctl restart doorbell
-    fi  
+    # Remove the existing service file
+    sudo systemctl stop doorbell.service
+    sudo systemctl disable doorbell.service
+    sudo rm /etc/systemd/system/doorbell.service
 fi
+
+# Get the python3 path
+PYTHON_PATH=$(which python3)
+
+cp doorbell.service /etc/systemd/system/doorbell.service
+sed -i "s|ExecStart=/path/to/python /path/to/your/script.py|ExecStart=tailwindcss -i $(pwd)/static/src/style.css -o $(pwd)/static/dist/style.css --minify && $PYTHON_PATH $(pwd)/agent.py|g" /etc/systemd/system/doorbell.service
+sed -i "s|WorkingDirectory=/path/to/your/script|WorkingDirectory=$(pwd)|g" /etc/systemd/system/doorbell.service
+sed -i "s|/path/to/doorbell|$(pwd)|g" /etc/systemd/system/doorbell.service
+sed -i "s|User=your_user|User=$(whoami)|g" /etc/systemd/system/doorbell.service
+
+# Enable and start the service
+sudo systemctl enable doorbell
+sudo systemctl start doorbell
 
 echo "Setup complete"
