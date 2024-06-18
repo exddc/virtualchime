@@ -126,8 +126,12 @@ class Agent:
     def get_version():
         """Get the version from the VERSION file."""
         version_file = Path(__file__).resolve().parent / "VERSION"
-        with open(version_file, encoding="utf-8") as f:
-            return f.read().strip()
+        try:
+            with open(version_file, encoding="utf-8") as f:
+                return f.read().strip()
+        except FileNotFoundError:
+            LOGGER.error("VERSION file not found.")
+            return "0.0.0"
 
 
 def watch_env_file(agent_instance):
