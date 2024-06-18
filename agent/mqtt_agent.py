@@ -20,7 +20,7 @@ LOGGER = logger.get_module_logger(__name__)
 class MqttAgent(paho.mqtt.client.Client):
     """MQTT Agent Module"""
 
-    def __init__(self, client_id: str, topics: list) -> None:
+    def __init__(self, client_id: str, topics: list, version: str) -> None:
         """Initialize the agent with the client ID and topics to subscribe to.
 
         param client_id: The client ID for the MQTT client.
@@ -28,6 +28,7 @@ class MqttAgent(paho.mqtt.client.Client):
         """
 
         self._topics = [] if topics is None else topics
+        self._version = version
         # super().__init__(paho.mqtt.client.CallbackAPIVersion.VERSION2, client_id)
         super().__init__(client_id)
 
@@ -54,6 +55,7 @@ class MqttAgent(paho.mqtt.client.Client):
         # self.on_connect = self._subscribe_on_connect
         # pylint: disable=attribute-defined-outside-init
         self.on_connect = LOGGER.info("Connected to MQTT Broker")
+        self.on_disconnect = LOGGER.warning("Disconnected from MQTT Broker")
         LOGGER.debug(
             "Connection Info: %s{}:%d",
             os.environ.get("MQTT_BROKER_IP"),
@@ -187,7 +189,11 @@ class MqttAgent(paho.mqtt.client.Client):
                 self.publish(
                     f"status/{os.environ.get('AGENT_LOCATION')}",
                     json.dumps(
-                        {"state": "online", "date": datetime.datetime.now().isoformat()}
+                        {
+                            "state": "online",
+                            "date": datetime.datetime.now().isoformat(),
+                            "version": self._version,
+                        }
                     ),
                     False,
                 )

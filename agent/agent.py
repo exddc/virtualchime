@@ -14,6 +14,7 @@ import doorbell_agent
 import indoor_unit_agent
 import web_server
 
+
 # Load environment variables
 dotenv.load_dotenv()
 env_path = Path(".") / ".env"
@@ -22,6 +23,7 @@ env_path = Path(".") / ".env"
 LOGGER = logger.get_module_logger(__name__)
 
 
+# pylint: disable=too-many-instance-attributes
 class Agent:
     """General Agent that creates a thread for each agent and module and runs them."""
 
@@ -30,26 +32,35 @@ class Agent:
         GPIO.cleanup()
         self.__agent_location = os.environ.get("AGENT_LOCATION")
         self.__agent_type = os.environ.get("AGENT_TYPE")
+        self._version = self.get_version()
         self._mqtt = mqtt_agent.MqttAgent(
             f"{self.__agent_type}_{self.__agent_location}",
             [],
+            self._version,
         )
         self._agent = None
         self._modules = []
+        self._has_internet = False
 
         self._mqtt.start()
         self._select_agent()
         self._select_modules()
 
         self._web_server = web_server.WebServer(self._mqtt)
+        self._internet_connection = threading.Thread(
+            target=self._check_internet_connection, daemon=True
+        )
 
     def run(self):
         """Run the agent and all modules"""
 
-        LOGGER.info("%s agent started.", self.__agent_type)
+        LOGGER.info(
+            "%s agent starting with version: %s", self.__agent_type, self._version
+        )
         self._agent.run()
         for module in self._modules:
             module.run()
+        self._internet_connection.start()
         self._web_server.run()
 
     def _select_agent(self):
@@ -65,6 +76,7 @@ class Agent:
     def _select_modules(self):
         """Select the modules based on the modules provided in the environment variables."""
         self.__modules = list(os.environ.get("MODULES").split(","))
+        LOGGER.debug("Modules selected: %s", self.__modules)
 
         for module in self.__modules:
             if module == "relay":
@@ -85,6 +97,7 @@ class Agent:
             else:
                 LOGGER.error(msg := "Unknown module")
                 raise NameError(msg)
+        LOGGER.debug("Modules loaded: %s", self._modules)
 
     def stop(self):
         """Stop the agent and all modules"""
@@ -92,8 +105,33 @@ class Agent:
             module.stop()
         self._agent.stop()
         self._mqtt.stop()
+        self._web_server.stop()
+        self._internet_connection.join()
         GPIO.cleanup()
-        LOGGER.info("%s agent stopped.", self.__agent_type)
+        LOGGER.info("%s %s agent stopped.", self.__agent_type, self.__agent_location)
+
+    def _check_internet_connection(self):
+        """Thread to check the internet connection and publish the status to the MQTT broker."""
+        while True:
+            if os.system("ping -c 1 www.google.com") == 0:
+                if not self._has_internet:
+                    LOGGER.info("Internet connection established.")
+                self._has_internet = True
+            else:
+                self._has_internet = False
+                LOGGER.warning("No internet connection. Retrying in 60 seconds.")
+            time.sleep(60)
+
+    @staticmethod
+    def get_version():
+        """Get the version from the VERSION file."""
+        version_file = Path(__file__).resolve().parent / "VERSION"
+        try:
+            with open(version_file, encoding="utf-8") as f:
+                return f.read().strip()
+        except FileNotFoundError:
+            LOGGER.error("VERSION file not found.")
+            return "0.0.0"
 
 
 def watch_env_file(agent_instance):
@@ -109,6 +147,7 @@ def watch_env_file(agent_instance):
                 )
                 dotenv.load_dotenv(dotenv_path=env_path, override=True)
                 agent_instance.stop()
+                LOGGER.info("Agent stopped due to .env changes. Restarting...")
                 agent_instance = Agent()
                 agent_instance.run()
                 last_mod_time = current_mod_time
@@ -119,19 +158,24 @@ def watch_env_file(agent_instance):
 
 
 if __name__ == "__main__":
-    agent = Agent()
-    agent.run()
+    while True:
+        try:
+            agent = Agent()
+            agent.run()
 
-    watcher_thread = threading.Thread(target=watch_env_file, args=(agent,))
-    watcher_thread.daemon = True
-    watcher_thread.start()
+            watcher_thread = threading.Thread(target=watch_env_file, args=(agent,))
+            watcher_thread.daemon = True
+            watcher_thread.start()
 
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        agent.stop()
-    # pylint: disable=broad-except
-    except Exception as e:
-        LOGGER.error("Agent failed: %s", str(e))
-        agent.stop()
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            LOGGER.info("KeyboardInterrupt received. Stopping agent.")
+            agent.stop()
+            break
+        # pylint: disable=broad-except
+        except Exception as e:
+            LOGGER.error("Agent failed: %s", str(e))
+            agent.stop()
+            LOGGER.info("Restarting agent...")
+            time.sleep(0.5)

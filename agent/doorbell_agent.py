@@ -32,7 +32,7 @@ class DoorbellAgent(base.BaseAgent):
             self._on_doorbell_message,
         )
         LOGGER.debug("Added callback for topic: %s", self._location_topic)
-        LOGGER.info("%s listening", self._agent_location)
+        LOGGER.info("Doorbell Agent %s listening", self._agent_location)
 
         pin_map_floors = json.loads(os.environ.get("PIN_MAP_FLOORS"))
 
@@ -70,7 +70,7 @@ class DoorbellAgent(base.BaseAgent):
                 last_pressed = datetime.datetime.now()
 
                 self._on_button_pressed(floor_name)
-                time.sleep(0.5)
+                time.sleep(0.1)
 
     # pylint: disable=unused-argument
     def _on_doorbell_message(self, client, userdata, msg):

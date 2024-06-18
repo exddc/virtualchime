@@ -24,7 +24,7 @@ class RelayAgent(base.BaseAgent):
             f"relay/{self._agent_location}", self._on_relay_message
         )
         LOGGER.debug("Added callback for topic: relay/%s", self._agent_location)
-        LOGGER.info("%s listening", self._agent_location)
+        LOGGER.info("Relay Agent %s listening", self._agent_location)
 
     # pylint: disable=unused-argument
     def _on_relay_message(self, client, userdata, msg):

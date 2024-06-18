@@ -28,7 +28,7 @@ class RfidAgent(base.BaseAgent):
     def run(self):
         """Run the agent and start listening for RFID tags."""
         self._rfid_thread.start()
-        LOGGER.info("RFID: %s listening", self._agent_location)
+        LOGGER.info("RFID Agent %s listening", self._agent_location)
 
     def _read_rfid(self):
         """Read RFID tags and publish the tag to the broker."""
