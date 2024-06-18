@@ -13,7 +13,7 @@ import mqtt_agent
 import doorbell_agent
 import indoor_unit_agent
 import web_server
-from . import __version__
+
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -21,6 +21,16 @@ env_path = Path(".") / ".env"
 
 # Initialize logger
 LOGGER = logger.get_module_logger(__name__)
+
+
+def get_version():
+    """Get the version from the VERSION file."""
+    version_file = Path(__file__).resolve().parent.parent / "VERSION"
+    with open(version_file) as f:
+        return f.read().strip()
+
+
+__version__ = get_version()
 
 
 # pylint: disable=too-many-instance-attributes
