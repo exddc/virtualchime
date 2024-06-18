@@ -9,7 +9,6 @@ import json
 import logger
 import dotenv
 import paho.mqtt.client
-from . import __version__
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -21,7 +20,7 @@ LOGGER = logger.get_module_logger(__name__)
 class MqttAgent(paho.mqtt.client.Client):
     """MQTT Agent Module"""
 
-    def __init__(self, client_id: str, topics: list) -> None:
+    def __init__(self, client_id: str, topics: list, version: str) -> None:
         """Initialize the agent with the client ID and topics to subscribe to.
 
         param client_id: The client ID for the MQTT client.
@@ -29,6 +28,7 @@ class MqttAgent(paho.mqtt.client.Client):
         """
 
         self._topics = [] if topics is None else topics
+        self._version = version
         # super().__init__(paho.mqtt.client.CallbackAPIVersion.VERSION2, client_id)
         super().__init__(client_id)
 
@@ -192,7 +192,7 @@ class MqttAgent(paho.mqtt.client.Client):
                         {
                             "state": "online",
                             "date": datetime.datetime.now().isoformat(),
-                            "version": __version__,
+                            "version": self._version,
                         }
                     ),
                     False,

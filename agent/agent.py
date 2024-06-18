@@ -23,16 +23,6 @@ env_path = Path(".") / ".env"
 LOGGER = logger.get_module_logger(__name__)
 
 
-def get_version():
-    """Get the version from the VERSION file."""
-    version_file = Path(__file__).resolve().parent.parent / "VERSION"
-    with open(version_file) as f:
-        return f.read().strip()
-
-
-__version__ = get_version()
-
-
 # pylint: disable=too-many-instance-attributes
 class Agent:
     """General Agent that creates a thread for each agent and module and runs them."""
@@ -42,9 +32,11 @@ class Agent:
         GPIO.cleanup()
         self.__agent_location = os.environ.get("AGENT_LOCATION")
         self.__agent_type = os.environ.get("AGENT_TYPE")
+        self._version = self.get_version()
         self._mqtt = mqtt_agent.MqttAgent(
             f"{self.__agent_type}_{self.__agent_location}",
             [],
+            self._version,
         )
         self._agent = None
         self._modules = []
@@ -63,7 +55,7 @@ class Agent:
         """Run the agent and all modules"""
 
         LOGGER.info(
-            "%s agent starting with version: %s", self.__agent_type, __version__
+            "%s agent starting with version: %s", self.__agent_type, self._version
         )
         self._agent.run()
         for module in self._modules:
@@ -129,6 +121,13 @@ class Agent:
                 self._has_internet = False
                 LOGGER.warning("No internet connection. Retrying in 60 seconds.")
             time.sleep(60)
+
+    @staticmethod
+    def get_version():
+        """Get the version from the VERSION file."""
+        version_file = Path(__file__).resolve().parent.parent / "VERSION"
+        with open(version_file, encoding="utf-8") as f:
+            return f.read().strip()
 
 
 def watch_env_file(agent_instance):
