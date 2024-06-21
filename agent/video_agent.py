@@ -3,13 +3,12 @@
 # pylint: disable=import-error, broad-except
 import os
 import threading
-import time
 import socket
 import logger
 import base
 from picamera2 import Picamera2
-from picamera2.encoders import H264Encoder, Quality
-from picamera2.outputs import FileOutput
+from picamera2.encoders import H264Encoder
+from picamera2.outputs import CircularOutput
 
 # Initialize logger
 LOGGER = logger.get_module_logger(__name__)
@@ -26,20 +25,11 @@ class VideoAgent(base.BaseAgent):
         self._record_time = int(os.environ.get("VIDEO_RECORDING_DURATION"))
         self._picamera = Picamera2()
         self._encoder = H264Encoder(bitrate=int(os.environ.get("VIDEO_BITRATE")))
-
-        recording_folder = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "recordings",
-        )
-
-        if not os.path.exists(recording_folder):
-            os.makedirs(recording_folder)
-            LOGGER.info("Created recording folder: %s", recording_folder)
-
-        self._output = FileOutput(recording_folder + "/video_recording.h264")
+        self._output = CircularOutput(buffersize=10 * 1024 * 1024)
 
         self._stream_thread = None
         self._sock = None
+        self._conn = None
 
     def run(self):
         """Subscribe to the mqtt topic and start listening for video messages."""
@@ -57,16 +47,17 @@ class VideoAgent(base.BaseAgent):
     # pylint: disable=unused-argument
     def _on_video_message(self, client, userdata, msg):
         LOGGER.info("Mqtt message received: %s", msg.payload)
-        self._toggle_video(msg.payload.decode("utf-8"))
+        payload = msg.payload.decode("utf-8")
+        self._toggle_video(payload)
 
-    def _toggle_video(self, payload):
+    def _toggle_video(self, command):
         """Toggle the video stream on or off."""
-        if payload == "on":
+        if command == "on":
             self._start_video_stream()
-        elif payload == "off":
+        elif command == "off":
             self._stop_video_stream()
         else:
-            LOGGER.error("Unknown video command: %s", payload)
+            LOGGER.error("Unknown video command: %s", command)
 
     def _start_video_stream(self):
         """Start the video stream."""
@@ -88,15 +79,19 @@ class VideoAgent(base.BaseAgent):
                     controls={"FrameRate": int(os.environ.get("VIDEO_FPS"))},
                 )
             )
-            self._picamera.start_recording(
-                self._encoder, self._output, quality=Quality.HIGH
-            )
-            self._streaming = True
+            self._encoder.output = self._output
+            self._picamera.start_recording(self._encoder)
 
-            self._sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self._sock.bind(("0.0.0.0", self._port))
+            self._sock.listen(1)
+            LOGGER.info(f"Waiting for a connection on port {self._port}...")
 
+            self._conn, addr = self._sock.accept()
+            LOGGER.info(f"Connection accepted from {addr}")
+
+            self._streaming = True
             self._stream_thread = threading.Thread(target=self._stream_video)
             self._stream_thread.start()
         except Exception as e:
@@ -112,21 +107,24 @@ class VideoAgent(base.BaseAgent):
                 self._streaming = False
                 if self._stream_thread:
                     self._stream_thread.join()
+                if self._conn:
+                    self._conn.close()
                 if self._sock:
                     self._sock.close()
             except Exception as e:
                 LOGGER.error("Failed to stop video stream: %s", e)
 
     def _stream_video(self):
-        """Stream video frames to the UDP socket."""
+        """Stream video frames to the TCP client."""
         try:
-            conn, addr = self._sock.accept()
-            with conn.makefile("wb") as stream:
-                while self._streaming:
-                    self._picamera.start_recording(self._encoder, FileOutput(stream))
-                    time.sleep(0.01)
+            while self._streaming:
+                data = self._output.read()
+                if data:
+                    self._conn.sendall(data)
         except Exception as e:
             LOGGER.error("Error streaming video: %s", e)
+        finally:
+            self._conn.close()
 
     def stop(self):
         """Stop the agent."""

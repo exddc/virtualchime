@@ -2,13 +2,20 @@
 
 {% block content %}
 <h1 class="font-bold text-lg mx-auto w-fit">Dashboard</h1>
-{% if stream_url %}
-    {% include 'partials/video_stream.html' %}
-{% else %}
-    <div class="max-w-7xl mx-auto rounded-lg bg-gray-100 border border-gray-300 p-1 shadow-lg">
-        <div class="flex items-center justify-center h-96">
-            <p class="text-lg text-gray-500">No video stream available</p>
-        </div>
-    </div>
-{% endif %}
+<video id="video" width="640" height="480" controls autoplay></video>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.3/socket.io.min.js"></script>
+<script>
+    const video = document.getElementById('video');
+    const mediaSource = new MediaSource();
+    video.src = URL.createObjectURL(mediaSource);
+
+    mediaSource.addEventListener('sourceopen', () => {
+        const sourceBuffer = mediaSource.addSourceBuffer('video/mp4; codecs="avc1.42E01E, mp4a.40.2"');
+        const socket = io();
+
+        socket.on('video_frame', (data) => {
+            sourceBuffer.appendBuffer(new Uint8Array(data));
+        });
+    });
+</script>
 {% endblock content %}
