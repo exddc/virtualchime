@@ -35,6 +35,7 @@ class StreamingOutput(io.BufferedIOBase):
             self.frame = buf
             self.condition.notify_all()
 
+output = StreamingOutput()
 
 class StreamingHandler(server.BaseHTTPRequestHandler):
     def do_GET(self):
@@ -81,27 +82,13 @@ class StreamingServer(socketserver.ThreadingMixIn, server.HTTPServer):
     daemon_threads = True
 
 
-picam2 = Picamera2()
-picam2.configure(picam2.create_video_configuration(main={"size": (1920, 1080)}))
-output = StreamingOutput()
-picam2.start_recording(MJPEGEncoder(), FileOutput(output))
-
-try:
-    address = ('', 8000)
-    server = StreamingServer(address, StreamingHandler)
-    server.serve_forever()
-finally:
-    picam2.stop_recording()
-
-
 class StreamAgent():
     def __init__(self) -> None:
         self._picam2 = Picamera2()
-        self._picam2.configure(picam2.create_video_configuration(main={"size": (1920, 1080)}))
-        self._output = StreamingOutput
+        self._picam2.configure(self._picam2.create_video_configuration(main={"size": (1920, 1080)}))
     
     def run(self) -> None:
-        self._picam2.start_recording(MJPEGEncoder(), FileOutput(self._output))
+        self._picam2.start_recording(MJPEGEncoder(), FileOutput(output))
         try:
             address = ("", 8000)
             server = StreamingServer(address, StreamingHandler)
@@ -112,6 +99,6 @@ class StreamAgent():
     def stop(self) -> None:
         self._picam2.stop_recording()
 
-if __name__ == __main__:
+if __name__ == '__main__':
     agent = StreamAgent()
     agent.run()

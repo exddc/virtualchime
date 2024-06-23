@@ -3,13 +3,13 @@
 # pylint: disable=import-error
 import os
 import dotenv
+import waitress
 from flask import Flask, render_template, request, redirect, url_for
 from flask_assets import Environment, Bundle
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO
 import base
 import logger
-import threading
-import socket
+
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -29,7 +29,6 @@ class WebServer(base.BaseAgent):
 
         self._port = int(os.environ.get("WEBSERVER_PORT"))
         self.app = Flask(__name__)
-        self.socketio = SocketIO(self.app)
 
         # Initialize assets
         self._assets = Environment(self.app)
@@ -42,22 +41,20 @@ class WebServer(base.BaseAgent):
         self.__css.build()
         self.__js.build()
 
-        # Register routes and socket events
+        # Register routes
         self._setup_routes()
-        self._setup_socket_events()
 
         self._web_server = None
-        self._video_stream_thread = None
-        self._streaming = False
 
     def _setup_routes(self) -> None:
         """Setup routes for the webserver."""
 
         @self.app.route("/")
         def dashboard():
-            LOGGER.info("Dashboard requested by %s", request.remote_addr)
-            # pylint: disable=line-too-long
-            return render_template("dashboard.html")
+             LOGGER.info("Dashboard requested by %s", request.remote_addr)
+             # pylint: disable=line-too-long
+             stream_url = f"http://{os.popen('hostname -I').read().split()[0]}:{os.environ.get('VIDEO_STREAM_PORT')}/stream.mjpg"
+             return render_template("dashboard.html", stream_url=stream_url)
 
         @self.app.route("/settings", methods=["GET", "POST"])
         def settings():
@@ -84,17 +81,6 @@ class WebServer(base.BaseAgent):
                 return render_template("partials/log_view.html", logs=logs)
             return render_template("logs.html", logs=logs, selected_lines=lines)
 
-    def _setup_socket_events(self):
-        @self.socketio.on("connect")
-        def handle_connect():
-            LOGGER.info("Client connected")
-            self._start_video_stream()
-
-        @self.socketio.on("disconnect")
-        def handle_disconnect():
-            LOGGER.info("Client disconnected")
-            self._stop_video_stream()
-
     def run(self) -> None:
         """Run the webserver."""
         self._mqtt.subscribe(self._location_topic)
@@ -103,51 +89,17 @@ class WebServer(base.BaseAgent):
             self._on_doorbell_message,
         )
         LOGGER.info("Webserver subscribed to MQTT topic: %s", self._location_topic)
-        self._web_server = threading.Thread(
-            target=lambda: self.socketio.run(self.app, host="0.0.0.0", port=self._port)
-        )
-        self._web_server.start()
+        self._web_server = waitress.serve(self.app, host="0.0.0.0", port=self._port)
         LOGGER.info("Webserver started on port %i.", self._port)
 
     def stop(self) -> None:
         """Stop the webserver."""
-        self._stop_video_stream()
-        self._web_server.join()
+        self._web_server.close()
         self._mqtt.unsubscribe(self._location_topic)
         LOGGER.info("Webserver unsubscribed from MQTT topic: %s", self._location_topic)
         self._mqtt.message_callback_remove(self._location_topic)
         LOGGER.info("Webserver stopped.")
 
-    def _start_video_stream(self):
-        """Start video streaming."""
-        if not self._streaming:
-            LOGGER.info("Starting video stream")
-            self._streaming = True
-            self._video_stream_thread = threading.Thread(target=self._stream_video)
-            self._video_stream_thread.start()
-
-    def _stop_video_stream(self):
-        """Stop video streaming."""
-        if self._streaming:
-            LOGGER.info("Stopping video stream")
-            self._streaming = False
-            if self._video_stream_thread:
-                self._video_stream_thread.join()
-
-    def _stream_video(self):
-        """Stream video to the WebSocket."""
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect(("127.0.0.1", int(os.environ.get("VIDEO_STREAM_PORT"))))
-        try:
-            while self._streaming:
-                data = sock.recv(4096)
-                if not data:
-                    break
-                self.socketio.emit("video_frame", data, broadcast=True)
-        except Exception as e:
-            LOGGER.error("Error streaming video: %s", e)
-        finally:
-            sock.close()
 
     # pylint: disable=unused-argument
     def _on_doorbell_message(self, client, userdata, msg):
@@ -246,3 +198,14 @@ class WebServer(base.BaseAgent):
         with open(file_path, "r", encoding="utf-8") as file:
             lines = file.readlines()[-lines:]
             return [line.strip() for line in lines]
+
+if __name__ == "__main__":
+     import mqtt_agent
+
+     web_server = WebServer(
+         mqtt_agent.MqttAgent(
+             f"{os.environ.get('AGENT_LOCATION')}_{os.environ.get('AGENT_TYPE')}",
+             [],
+         )
+     )
+     web_server.run()
