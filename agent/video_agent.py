@@ -3,13 +3,13 @@
 # pylint: disable=import-error, broad-except
 import os
 import io
+import datetime
 from http import server
 from threading import Condition
 import socketserver
 from picamera2 import Picamera2
 from picamera2.encoders import MJPEGEncoder
 from picamera2.outputs import FileOutput
-import datetime
 import logger
 import base
 
@@ -23,7 +23,9 @@ class StreamingOutput(io.BufferedIOBase):
     def __init__(self):
         self.frame = None
         self.condition = Condition()
-        self.file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "recordings")
+        self.file_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "recordings"
+        )
         self.recording_duration = int(os.environ.get("VIDEO_RECORDING_DURATION"))
         self.max_file_size = self.recording_duration * 1024 * 1024
         self.current_file_size = 0
@@ -32,8 +34,8 @@ class StreamingOutput(io.BufferedIOBase):
         if not os.path.exists(self.file_path):
             os.makedirs(self.file_path)
             LOGGER.info("Created recordings folder: %s", self.file_path)
-
-        try: 
+        try:
+            # pylint: disable=consider-using-with
             self.output_file = open(self.file_path + "/stream.mjpg", "wb")
         except FileNotFoundError as e:
             LOGGER.error("Error opening file: %s", e)
@@ -108,6 +110,7 @@ class StreamingServer(socketserver.ThreadingMixIn, server.HTTPServer):
     daemon_threads = True
 
 
+# pylint: disable=too-many-instance-attributes
 class VideoAgent(base.BaseAgent):
     """Video Stream Agent class."""
 
@@ -134,14 +137,14 @@ class VideoAgent(base.BaseAgent):
         except Exception as e:
             LOGGER.error("Error initializing camera: %s", e)
             return
-        
-        LOGGER.debug("here 1")
-        self._images_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
-        LOGGER.debug("here 2")
+
+        self._images_dir = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "images"
+        )
+
         if not os.path.exists(self._images_dir):
             os.makedirs(self._images_dir)
             LOGGER.info("Created images folder: %s", self._images_dir)
-        LOGGER.debug("here 3")
 
     def run(self):
         """Subscribe to the mqtt topic and start listening for video messages."""
@@ -149,7 +152,9 @@ class VideoAgent(base.BaseAgent):
         self._mqtt.message_callback_add(
             f"video/{self._agent_location}", self._on_video_message
         )
-        LOGGER.info("Video Agent subscribed to MQTT topic: video/%s", self._agent_location)
+        LOGGER.info(
+            "Video Agent subscribed to MQTT topic: video/%s", self._agent_location
+        )
 
         self._mqtt.subscribe(self._location_topic)
         self._mqtt.message_callback_add(
@@ -241,7 +246,7 @@ class VideoAgent(base.BaseAgent):
         except Picamera2.PiCameraError as e:
             LOGGER.error("Camera not connected: %s", e)
             return False
-    
+
     def _capture_image(self):
         """Capture an image with the camera and save it to the images folder."""
         try:
