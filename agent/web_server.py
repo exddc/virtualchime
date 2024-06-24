@@ -2,8 +2,8 @@
 
 # pylint: disable=import-error
 import os
-import dotenv
 import threading
+import dotenv
 import waitress
 from flask import Flask, render_template, request, redirect, url_for
 from flask_assets import Environment, Bundle
@@ -106,10 +106,9 @@ class WebServer(base.BaseAgent):
         try:
             waitress.serve(self.app, port=self._port)
             LOGGER.info("Webserver started on port %i.", self._port)
+        # pylint: disable=broad-except
         except Exception as error:
             LOGGER.error("Error starting the webserver: %s", error)
-        
-
 
     # pylint: disable=unused-argument
     def _on_doorbell_message(self, client, userdata, msg):
@@ -208,6 +207,7 @@ class WebServer(base.BaseAgent):
         with open(file_path, "r", encoding="utf-8") as file:
             lines = file.readlines()[-lines:]
             return [line.strip() for line in lines]
+
 
 if __name__ == "__main__":
     import mqtt_agent

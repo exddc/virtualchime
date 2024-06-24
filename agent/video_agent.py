@@ -15,8 +15,10 @@ import base
 # Initialize logger
 LOGGER = logger.get_module_logger(__name__)
 
+
 class StreamingOutput(io.BufferedIOBase):
     """Class to handle streaming output."""
+
     def __init__(self):
         self.frame = None
         self.condition = Condition()
@@ -26,41 +28,46 @@ class StreamingOutput(io.BufferedIOBase):
             self.frame = buf
             self.condition.notify_all()
 
+
 OUTPUT = StreamingOutput()
+
 
 class StreamingHandler(server.BaseHTTPRequestHandler):
     """Class to handle streaming requests."""
+
     # pylint: disable=invalid-name
     def do_GET(self):
         """Handle GET requests."""
-        if self.path == '/':
-            LOGGER.info('Request for /. Redirecting to /stream.mjpg')
+        if self.path == "/":
+            LOGGER.info("Request for /. Redirecting to /stream.mjpg")
             self.send_response(301)
-            self.send_header('Location', '/stream.mjpg')
+            self.send_header("Location", "/stream.mjpg")
             self.end_headers()
-        elif self.path == '/stream.mjpg':
-            LOGGER.info('Request for /stream.mjpg')
+        elif self.path == "/stream.mjpg":
+            LOGGER.info("Request for /stream.mjpg")
             self.send_response(200)
-            self.send_header('Age', 0)
-            self.send_header('Cache-Control', 'no-cache, private')
-            self.send_header('Pragma', 'no-cache')
-            self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=FRAME')
+            self.send_header("Age", 0)
+            self.send_header("Cache-Control", "no-cache, private")
+            self.send_header("Pragma", "no-cache")
+            self.send_header(
+                "Content-Type", "multipart/x-mixed-replace; boundary=FRAME"
+            )
             self.end_headers()
             try:
                 while True:
                     with OUTPUT.condition:
                         OUTPUT.condition.wait()
                         frame = OUTPUT.frame
-                    self.wfile.write(b'--FRAME\r\n')
-                    self.send_header('Content-Type', 'image/jpeg')
-                    self.send_header('Content-Length', len(frame))
+                    self.wfile.write(b"--FRAME\r\n")
+                    self.send_header("Content-Type", "image/jpeg")
+                    self.send_header("Content-Length", len(frame))
                     self.end_headers()
                     self.wfile.write(frame)
-                    self.wfile.write(b'\r\n')
+                    self.wfile.write(b"\r\n")
             except Exception as e:
                 LOGGER.warning(
-                    'Removed streaming client %s: %s',
-                    self.client_address, str(e))
+                    "Removed streaming client %s: %s", self.client_address, str(e)
+                )
         else:
             self.send_error(404)
             self.end_headers()
@@ -68,6 +75,7 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
 
 class StreamingServer(socketserver.ThreadingMixIn, server.HTTPServer):
     """Class to handle streaming server."""
+
     allow_reuse_address = True
     daemon_threads = True
 
@@ -79,13 +87,17 @@ class VideoAgent(base.BaseAgent):
         """Initialize the agent with the MQTT client and settings."""
         super().__init__(mqtt_client)
         self._streaming = False
-        self._port =  int(os.environ.get("VIDEO_STREAM_PORT"))
+        self._port = int(os.environ.get("VIDEO_STREAM_PORT"))
         self._video_width = int(os.environ.get("VIDEO_WIDTH"))
         self._video_height = int(os.environ.get("VIDEO_HEIGHT"))
         self._address = ("", self._port)
         self._record_time = int(os.environ.get("VIDEO_RECORDING_DURATION"))
         self._picamera = Picamera2()
-        self._picamera.configure(self._picamera.create_video_configuration(main={"size": (self._video_width, self._video_height)}))
+        self._picamera.configure(
+            self._picamera.create_video_configuration(
+                main={"size": (self._video_width, self._video_height)}
+            )
+        )
 
     def run(self):
         """Subscribe to the mqtt topic and start listening for video messages."""
@@ -126,21 +138,21 @@ class VideoAgent(base.BaseAgent):
         LOGGER.info("Starting video stream")
         self._picamera.start_recording(MJPEGEncoder(), FileOutput(OUTPUT))
         try:
-            server = StreamingServer(self._address, StreamingHandler)
-            server.serve_forever()
+            __server = StreamingServer(self._address, StreamingHandler)
+            __server.serve_forever()
         # pylint: disable=broad-except
         except Exception:
             LOGGER.error("Error starting video stream")
             self._stop_video_stream()
-            
+
     def _stop_video_stream(self):
         """Stop the video stream."""
         LOGGER.info("Stopping video stream")
         try:
-            self._picamera.stop_recording()   
+            self._picamera.stop_recording()
         # pylint: disable=broad-except
         except Exception as e:
-                LOGGER.error("Failed to stop video stream: %s", e)
+            LOGGER.error("Failed to stop video stream: %s", e)
         finally:
             self._streaming = False
 
