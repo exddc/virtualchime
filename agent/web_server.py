@@ -6,7 +6,6 @@ import dotenv
 import waitress
 from flask import Flask, render_template, request, redirect, url_for
 from flask_assets import Environment, Bundle
-from flask_socketio import SocketIO
 import base
 import logger
 

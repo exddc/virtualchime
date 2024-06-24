@@ -176,6 +176,5 @@ if __name__ == "__main__":
         # pylint: disable=broad-except
         except Exception as e:
             LOGGER.error("Agent failed: %s", str(e))
-            agent.stop()
             LOGGER.info("Restarting agent...")
             time.sleep(0.5)

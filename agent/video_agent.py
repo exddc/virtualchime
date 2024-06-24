@@ -30,9 +30,14 @@ OUTPUT = StreamingOutput()
 
 class StreamingHandler(server.BaseHTTPRequestHandler):
     """Class to handle streaming requests."""
+    # pylint: disable=invalid-name
     def do_GET(self):
         """Handle GET requests."""
-        if self.path == '/stream.mjpg':
+        if self.path == '/':
+            self.send_response(301)
+            self.send_header('Location', '/stream.mjpg')
+            self.end_headers()
+        elif self.path == '/stream.mjpg':
             self.send_response(200)
             self.send_header('Age', 0)
             self.send_header('Cache-Control', 'no-cache, private')
@@ -78,7 +83,7 @@ class VideoAgent(base.BaseAgent):
         self._address = ("", self._port)
         self._record_time = int(os.environ.get("VIDEO_RECORDING_DURATION"))
         self._picamera = Picamera2()
-        self._picamera.configure(self._picam.create_video_configuration(main={"size": (self._video_width, self._video_height)}))
+        self._picamera.configure(self._picamera.create_video_configuration(main={"size": (self._video_width, self._video_height)}))
 
     def run(self):
         """Subscribe to the mqtt topic and start listening for video messages."""
@@ -126,7 +131,6 @@ class VideoAgent(base.BaseAgent):
             LOGGER.error("Error starting video stream")
             self._stop_video_stream()
             
-
     def _stop_video_stream(self):
         """Stop the video stream."""
         LOGGER.info("Stopping video stream")
