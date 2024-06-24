@@ -2,12 +2,14 @@
 
 # pylint: disable=import-error
 import os
+import threading
 import dotenv
+import waitress
 from flask import Flask, render_template, request, redirect, url_for
 from flask_assets import Environment, Bundle
-import waitress
 import base
 import logger
+
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -51,7 +53,7 @@ class WebServer(base.BaseAgent):
         def dashboard():
             LOGGER.info("Dashboard requested by %s", request.remote_addr)
             # pylint: disable=line-too-long
-            stream_url = f"http://{os.popen('hostname -I').read().split()[0]}:{os.environ.get('VIDEO_STREAM_PORT')}/video_stream"
+            stream_url = f"http://{os.popen('hostname -I').read().split()[0]}:{os.environ.get('VIDEO_STREAM_PORT')}/stream.mjpg"
             return render_template("dashboard.html", stream_url=stream_url)
 
         @self.app.route("/settings", methods=["GET", "POST"])
@@ -87,16 +89,26 @@ class WebServer(base.BaseAgent):
             self._on_doorbell_message,
         )
         LOGGER.info("Webserver subscribed to MQTT topic: %s", self._location_topic)
-        self._web_server = waitress.serve(self.app, host="0.0.0.0", port=self._port)
-        LOGGER.info("Webserver started on port %i.", self._port)
+        self._web_server = threading.Thread(target=self._start_web_server, daemon=True)
+        self._web_server.start()
 
     def stop(self) -> None:
         """Stop the webserver."""
-        self._web_server.close()
+        self._web_server.join()
         self._mqtt.unsubscribe(self._location_topic)
         LOGGER.info("Webserver unsubscribed from MQTT topic: %s", self._location_topic)
         self._mqtt.message_callback_remove(self._location_topic)
         LOGGER.info("Webserver stopped.")
+
+    def _start_web_server(self) -> None:
+        """Start the webserver."""
+        LOGGER.info("Starting the webserver")
+        try:
+            waitress.serve(self.app, port=self._port)
+            LOGGER.info("Webserver started on port %i.", self._port)
+        # pylint: disable=broad-except
+        except Exception as error:
+            LOGGER.error("Error starting the webserver: %s", error)
 
     # pylint: disable=unused-argument
     def _on_doorbell_message(self, client, userdata, msg):

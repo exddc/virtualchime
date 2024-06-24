@@ -58,10 +58,11 @@ class Agent:
             "%s agent starting with version: %s", self.__agent_type, self._version
         )
         self._agent.run()
-        for module in self._modules:
-            module.run()
         self._internet_connection.start()
         self._web_server.run()
+
+        for module in self._modules:
+            module.run()
 
     def _select_agent(self):
         """Select the agent based on the agent type."""
@@ -107,7 +108,6 @@ class Agent:
         self._mqtt.stop()
         self._web_server.stop()
         self._internet_connection.join()
-        GPIO.cleanup()
         LOGGER.info("%s %s agent stopped.", self.__agent_type, self.__agent_location)
 
     def _check_internet_connection(self):
@@ -176,6 +176,5 @@ if __name__ == "__main__":
         # pylint: disable=broad-except
         except Exception as e:
             LOGGER.error("Agent failed: %s", str(e))
-            agent.stop()
             LOGGER.info("Restarting agent...")
             time.sleep(0.5)
