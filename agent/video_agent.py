@@ -9,6 +9,7 @@ import socketserver
 from picamera2 import Picamera2
 from picamera2.encoders import MJPEGEncoder
 from picamera2.outputs import FileOutput
+import datetime
 import logger
 import base
 
@@ -113,28 +114,50 @@ class VideoAgent(base.BaseAgent):
     def __init__(self, mqtt_client):
         """Initialize the agent with the MQTT client and settings."""
         super().__init__(mqtt_client)
+        self._location_topic = f"{self._mqtt_topic}/{self._agent_location}"
         self._streaming = False
         self._port = int(os.environ.get("VIDEO_STREAM_PORT"))
         self._video_width = int(os.environ.get("VIDEO_WIDTH"))
         self._video_height = int(os.environ.get("VIDEO_HEIGHT"))
         self._address = ("", self._port)
         self._record_time = int(os.environ.get("VIDEO_RECORDING_DURATION"))
-        self._picamera = Picamera2()
-        self._picamera.configure(
-            self._picamera.create_video_configuration(
-                main={"size": (self._video_width, self._video_height)}
+        self._image_on_ring = os.environ.get("IMAGE_ON_RING") == "True"
+
+        try:
+            self._picamera = Picamera2()
+            self._picamera.configure(
+                self._picamera.create_video_configuration(
+                    main={"size": (self._video_width, self._video_height)}
+                )
             )
-        )
+        # pylint: disable=broad-except
+        except Exception as e:
+            LOGGER.error("Error initializing camera: %s", e)
+            return
+        
+        LOGGER.debug("here 1")
+        self._images_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "images")
+        LOGGER.debug("here 2")
+        if not os.path.exists(self._images_dir):
+            os.makedirs(self._images_dir)
+            LOGGER.info("Created images folder: %s", self._images_dir)
+        LOGGER.debug("here 3")
 
     def run(self):
         """Subscribe to the mqtt topic and start listening for video messages."""
         self._mqtt.subscribe(f"video/{self._agent_location}")
-        LOGGER.debug("Subscribed to topic: video/%s", self._agent_location)
         self._mqtt.message_callback_add(
             f"video/{self._agent_location}", self._on_video_message
         )
-        LOGGER.debug("Added callback for topic: video/%s", self._agent_location)
-        LOGGER.info("Video Agent %s listening", self._agent_location)
+        LOGGER.info("Video Agent subscribed to MQTT topic: video/%s", self._agent_location)
+
+        self._mqtt.subscribe(self._location_topic)
+        self._mqtt.message_callback_add(
+            self._location_topic,
+            self._on_doorbell_message,
+        )
+        LOGGER.info("Video Agent subscribed to MQTT topic: %s", self._location_topic)
+
         if os.environ.get("VIDEO_AUTOSTART") == "True" and not self._streaming:
             LOGGER.info("Autostarting video stream")
             self._start_video_stream()
@@ -144,6 +167,18 @@ class VideoAgent(base.BaseAgent):
         LOGGER.info("Mqtt message received: %s", msg.payload)
         payload = msg.payload.decode("utf-8")
         self._toggle_video(payload)
+
+    # pylint: disable=unused-argument
+    def _on_doorbell_message(self, client, userdata, msg):
+        """Process the doorbell message.
+
+        param client: The client instance for this callback.
+        param userdata: The private user data as set in Client() or userdata_set().
+        param msg: An instance of MQTTMessage.
+        """
+        LOGGER.info("Doorbell message received. %s", msg.payload.decode("utf-8"))
+        if self._image_on_ring:
+            self._capture_image()
 
     def _toggle_video(self, command):
         """Toggle the video stream on or off."""
@@ -206,6 +241,17 @@ class VideoAgent(base.BaseAgent):
         except Picamera2.PiCameraError as e:
             LOGGER.error("Camera not connected: %s", e)
             return False
+    
+    def _capture_image(self):
+        """Capture an image with the camera and save it to the images folder."""
+        try:
+            __filename = datetime.datetime.now().strftime("%Y%m%d_%H%M%S.jpg")
+            file_path = os.path.join(self._images_dir, __filename)
+
+            self._picamera.capture_file(file_path)
+            LOGGER.info("Captured image saved to: %s", file_path)
+        except Exception as e:
+            LOGGER.error("Error capturing image: %s", e)
 
     def stop(self):
         """Stop the agent."""
