@@ -136,8 +136,13 @@ class VideoAgent(base.BaseAgent):
     def _start_video_stream(self):
         """Start the video stream."""
         LOGGER.info("Starting video stream")
+        if not self._check_camera_status():
+            LOGGER.error("Cannot start video stream.")
+            return
+
         self._picamera.start_recording(MJPEGEncoder(), FileOutput(OUTPUT))
         try:
+            self._streaming = True
             __server = StreamingServer(self._address, StreamingHandler)
             __server.serve_forever()
         # pylint: disable=broad-except
@@ -155,6 +160,22 @@ class VideoAgent(base.BaseAgent):
             LOGGER.error("Failed to stop video stream: %s", e)
         finally:
             self._streaming = False
+
+    def _check_camera_status(self):
+        """Check the camera status."""
+        try:
+            self._picamera.capture_file("test_image.jpg")
+
+            if os.path.exists("test_image.jpg"):
+                os.remove("test_image.jpg")
+                LOGGER.debug("Camera connected and working.")
+                return True
+
+            LOGGER.error("Camera connected, but failed to capture image.")
+            return False
+        except Picamera2.PiCameraError as e:
+            LOGGER.error("Camera not connected: %s", e)
+            return False
 
     def stop(self):
         """Stop the agent."""
