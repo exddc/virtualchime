@@ -3,6 +3,7 @@
 # pylint: disable=import-error
 import os
 import dotenv
+import threading
 import waitress
 from flask import Flask, render_template, request, redirect, url_for
 from flask_assets import Environment, Bundle
@@ -50,10 +51,10 @@ class WebServer(base.BaseAgent):
 
         @self.app.route("/")
         def dashboard():
-             LOGGER.info("Dashboard requested by %s", request.remote_addr)
-             # pylint: disable=line-too-long
-             stream_url = f"http://{os.popen('hostname -I').read().split()[0]}:{os.environ.get('VIDEO_STREAM_PORT')}/stream.mjpg"
-             return render_template("dashboard.html", stream_url=stream_url)
+            LOGGER.info("Dashboard requested by %s", request.remote_addr)
+            # pylint: disable=line-too-long
+            stream_url = f"http://{os.popen('hostname -I').read().split()[0]}:{os.environ.get('VIDEO_STREAM_PORT')}/stream.mjpg"
+            return render_template("dashboard.html", stream_url=stream_url)
 
         @self.app.route("/settings", methods=["GET", "POST"])
         def settings():
@@ -88,16 +89,26 @@ class WebServer(base.BaseAgent):
             self._on_doorbell_message,
         )
         LOGGER.info("Webserver subscribed to MQTT topic: %s", self._location_topic)
-        self._web_server = waitress.serve(self.app, host="0.0.0.0", port=self._port)
-        LOGGER.info("Webserver started on port %i.", self._port)
+        self._web_server = threading.Thread(target=self._start_web_server, daemon=True)
+        self._web_server.start()
 
     def stop(self) -> None:
         """Stop the webserver."""
-        self._web_server.close()
+        self._web_server.join()
         self._mqtt.unsubscribe(self._location_topic)
         LOGGER.info("Webserver unsubscribed from MQTT topic: %s", self._location_topic)
         self._mqtt.message_callback_remove(self._location_topic)
         LOGGER.info("Webserver stopped.")
+
+    def _start_web_server(self) -> None:
+        """Start the webserver."""
+        LOGGER.info("Starting the webserver")
+        try:
+            waitress.serve(self.app, port=self._port)
+            LOGGER.info("Webserver started on port %i.", self._port)
+        except Exception as error:
+            LOGGER.error("Error starting the webserver: %s", error)
+        
 
 
     # pylint: disable=unused-argument
@@ -199,12 +210,12 @@ class WebServer(base.BaseAgent):
             return [line.strip() for line in lines]
 
 if __name__ == "__main__":
-     import mqtt_agent
+    import mqtt_agent
 
-     web_server = WebServer(
-         mqtt_agent.MqttAgent(
-             f"{os.environ.get('AGENT_LOCATION')}_{os.environ.get('AGENT_TYPE')}",
-             [],
-         )
-     )
-     web_server.run()
+    web_server = WebServer(
+        mqtt_agent.MqttAgent(
+            f"{os.environ.get('AGENT_LOCATION')}_{os.environ.get('AGENT_TYPE')}",
+            [],
+        )
+    )
+    web_server.run()

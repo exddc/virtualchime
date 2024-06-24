@@ -34,10 +34,12 @@ class StreamingHandler(server.BaseHTTPRequestHandler):
     def do_GET(self):
         """Handle GET requests."""
         if self.path == '/':
+            LOGGER.info('Request for /. Redirecting to /stream.mjpg')
             self.send_response(301)
             self.send_header('Location', '/stream.mjpg')
             self.end_headers()
         elif self.path == '/stream.mjpg':
+            LOGGER.info('Request for /stream.mjpg')
             self.send_response(200)
             self.send_header('Age', 0)
             self.send_header('Cache-Control', 'no-cache, private')
