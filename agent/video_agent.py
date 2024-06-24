@@ -17,16 +17,43 @@ LOGGER = logger.get_module_logger(__name__)
 
 
 class StreamingOutput(io.BufferedIOBase):
-    """Class to handle streaming output."""
+    """Class to handle streaming output with file size limit."""
 
     def __init__(self):
         self.frame = None
         self.condition = Condition()
+        self.file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "recordings")
+        self.recording_duration = int(os.environ.get("VIDEO_RECORDING_DURATION"))
+        self.max_file_size = self.recording_duration * 1024 * 1024
+        self.current_file_size = 0
+        self.output_file = None
+
+        if not os.path.exists(self.file_path):
+            os.makedirs(self.file_path)
+            LOGGER.info("Created recordings folder: %s", self.file_path)
+
+        try: 
+            self.output_file = open(self.file_path + "/stream.mjpg", "wb")
+        except FileNotFoundError as e:
+            LOGGER.error("Error opening file: %s", e)
 
     def write(self, buf):
         with self.condition:
             self.frame = buf
             self.condition.notify_all()
+
+            if self.output_file:
+                self.output_file.write(buf)
+                self.output_file.flush()
+                self.current_file_size += len(buf)
+
+                if self.current_file_size >= self.max_file_size:
+                    self.output_file.seek(0)
+                    self.current_file_size = 0
+
+    def close(self):
+        if self.output_file:
+            self.output_file.close()
 
 
 OUTPUT = StreamingOutput()
@@ -155,6 +182,7 @@ class VideoAgent(base.BaseAgent):
         LOGGER.info("Stopping video stream")
         try:
             self._picamera.stop_recording()
+            OUTPUT.close()
         # pylint: disable=broad-except
         except Exception as e:
             LOGGER.error("Failed to stop video stream: %s", e)
@@ -164,7 +192,9 @@ class VideoAgent(base.BaseAgent):
     def _check_camera_status(self):
         """Check the camera status."""
         try:
+            self._picamera.start()
             self._picamera.capture_file("test_image.jpg")
+            self._picamera.stop()
 
             if os.path.exists("test_image.jpg"):
                 os.remove("test_image.jpg")
