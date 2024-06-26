@@ -1,37 +1,36 @@
-<div class="flex flex-shrink-0">
-    <div class="flex flex-col w-64">
-      <div class="flex flex-col flex-grow pt-5 overflow-y-auto bg-white border-r">
-        <div class="flex flex-col flex-shrink-0 px-4">
-          <a class="text-lg font-semibold tracking-tighter text-black focus:outline-none focus:ring px-4" href="/">
-            <span class="inline-flex items-center">                
-              virtualchime
-            </span>
-          </a>
-        </div> 
-        <div class="flex flex-col flex-grow mt-5">
-          <nav class="flex-1 space-y-1 bg-white">
-            <ul>
-              <li>
-                <a class="inline-flex items-center w-full px-4 py-2 mt-1 text-sm text-gray-500 transition duration-200 ease-in-out transform border-l-4 border-transparent focus:shadow-outline hover:border-blue-500 hover:scale-95 hover:text-blue-500" href="/">
-                  <ion-icon class="size-4 md hydrated" name="aperture-outline" role="img" aria-label="aperture outline"></ion-icon>
-                  <span> Dashboard </span>
-                </a>
-              </li>
-              <li>
-                <a class="inline-flex items-center w-full px-4 py-2 mt-1 text-sm text-gray-500 transition duration-200 ease-in-out transform border-l-4 border-transparent focus:shadow-outline hover:border-blue-500 hover:scale-95 hover:text-blue-500" href="/settings">
-                  <ion-icon class="size-4 md hydrated" name="trending-up-outline" role="img" aria-label="trending up outline"></ion-icon>
-                  <span> Settings </span>
-                </a>
-              </li>
-              <li>
-                <a class="inline-flex items-center w-full px-4 py-2 mt-1 text-sm text-gray-500 transition duration-200 ease-in-out transform border-l-4 border-transparent focus:shadow-outline hover:border-blue-500 hover:scale-95 hover:text-blue-500" href="/logs">
-                  <ion-icon class="size-4 md hydrated" name="trending-up-outline" role="img" aria-label="trending up outline"></ion-icon>
-                  <span> Logs </span>
-                </a>
-              </li>
-            </ul>
-          </nav>
-        </div>
-      </div>
-    </div>
+<div id="sidebar" class="min-w-[50px] border-r border-gray-200 w-full max-w-56 h-screen">
+  <div class="flex h-[52px] items-center justify-center">
+    <a class="text-lg font-semibold tracking-tighter text-black focus:outline-none focus:ring px-4" href="/">
+      virtualchime
+    </a>
   </div>
+  <div class="shrink-0 bg-gray-200 h-[1px] w-full"></div>
+  <div class="flex flex-col items-center justify-center">
+    <nav class="grid gap-1 p-2 w-full text-sm font-normal">
+      <a 
+      x-data="{ isActive: window.location.pathname === '/' }" 
+      :class="isActive ? 'bg-black text-white' : 'bg-white text-black'" 
+      class="hover:bg-black/20 h-9 px-4 w-full flex items-center justify-start whitespace-nowrap rounded-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" 
+      href="/">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+        <span class="ml-4">Dashboard</span>
+      </a>
+      <a 
+      x-data="{ isActive: window.location.pathname === '/logs' }" 
+      :class="isActive ? 'bg-black text-white' : 'bg-white text-black'" 
+      class="hover:bg-black/20 h-9 px-4 w-full flex items-center justify-start whitespace-nowrap rounded-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" 
+      href="/logs">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m8 16 2-2-2-2"/><path d="M12 18h4"/></svg>
+        <span class="ml-4">Logs</span>
+      </a>
+      <a 
+      x-data="{ isActive: window.location.pathname === '/settings' }" 
+      :class="isActive ? 'bg-black text-white' : 'bg-white text-black'" 
+      class="hover:bg-black/20 h-9 px-4 w-full flex items-center justify-start whitespace-nowrap rounded-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" 
+      href="/settings">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span class="ml-4">Settings</span>
+      </a>
+    </nav>
+  </div>
+</div>

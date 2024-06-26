@@ -52,9 +52,18 @@ class WebServer(base.BaseAgent):
         @self.app.route("/")
         def dashboard():
             LOGGER.info("Dashboard requested by %s", request.remote_addr)
-            # pylint: disable=line-too-long
-            stream_url = f"http://{os.popen('hostname -I').read().split()[0]}:{os.environ.get('VIDEO_STREAM_PORT')}/stream.mjpg"
-            return render_template("dashboard.html", stream_url=stream_url)
+            try:
+                __hostaddress = os.popen("hostname -I").read().split()[0]
+                __video_port = os.environ.get("VIDEO_STREAM_PORT")
+                stream_url = f"http://{__hostaddress}:{__video_port}/stream.mjpg"
+            except IndexError:
+                LOGGER.error("Failed to get the IP address.")
+                stream_url = None
+            return render_template(
+                "dashboard.html",
+                stream_url=stream_url,
+                page_title="Dashboard",
+            )
 
         @self.app.route("/settings", methods=["GET", "POST"])
         def settings():
@@ -68,7 +77,9 @@ class WebServer(base.BaseAgent):
                 return redirect(url_for("settings"))
 
             sections = self.read_env_file(env_file_path)
-            return render_template("settings.html", sections=sections)
+            return render_template(
+                "settings.html", sections=sections, page_title="Settings"
+            )
 
         @self.app.route("/logs", methods=["GET", "POST"])
         def logs():
@@ -79,7 +90,9 @@ class WebServer(base.BaseAgent):
             if request.headers.get("HX-Request"):
                 LOGGER.debug("Returning partial log view.")
                 return render_template("partials/log_view.html", logs=logs)
-            return render_template("logs.html", logs=logs, selected_lines=lines)
+            return render_template(
+                "logs.html", logs=logs, selected_lines=lines, page_title="Logs"
+            )
 
     def run(self) -> None:
         """Run the webserver."""
@@ -216,6 +229,14 @@ if __name__ == "__main__":
         mqtt_agent.MqttAgent(
             f"{os.environ.get('AGENT_LOCATION')}_{os.environ.get('AGENT_TYPE')}",
             [],
+            "testing",
         )
     )
     web_server.run()
+
+    try:
+        while True:
+            pass
+    except KeyboardInterrupt:
+        web_server.stop()
+        LOGGER.info("Webserver stopped.")

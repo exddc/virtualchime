@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    {% assets 'css' %}
+      <link rel="stylesheet" href="{{ ASSET_URL }}">
+    {% endassets %}
+
+    {% assets 'js' %}
+      <script type="text/javascript" src="{{ ASSET_URL }}"></script>
+      <script src="https://cdn.jsdelivr.net/npm/alpinejs@2.x.x/dist/alpine.min.js" defer></script>
+    {% endassets %}
+
+    <title>Doorbell</title>
+  </head>
+  <body class="bg-whtie">
+    <div class="flex h-full w-full">
+      {% include 'partials/sidenav.html' %}
+      <main id="content" class="w-full">
+        <div class="flex h-[52px] items-center justify-center">
+          <a class="text-lg font-semibold tracking-tight text-black focus:outline-none focus:ring px-4" href="/">
+            {{ page_title }}
+          </a>
+        </div>
+        <div class="shrink-0 bg-gray-200 h-[1px] w-full"></div>
+        <div class="p-4 lg:p-8">
+          {% block content %}{% endblock %}
+        </div>
+      </main>
+    </div>
+  </body>
+</html>
+
