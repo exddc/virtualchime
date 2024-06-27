@@ -19,14 +19,16 @@
   <body class="bg-whtie">
     <div class="flex h-full w-full">
       {% include 'partials/sidenav.html' %}
-      <main id="content" class="w-full">
-        <div class="flex h-[52px] items-center justify-center">
-          <a class="text-lg font-semibold tracking-tight text-black focus:outline-none focus:ring px-4" href="/">
-            {{ page_title }}
-          </a>
+      <main id="content" class="ml-56 max-w-[calc(100% - 14rem)] w-full h-full overflow-y-auto">
+        <div class="h-[52px] bg-white fixed top-0 w-full">
+          <div class="flex items-center justify-start h-full">
+            <span class="text-lg font-semibold tracking-tight text-black px-4" href="/">
+              {{ page_title }}
+            </span>
+          </div>
+          <div class="shrink-0 bg-gray-200 h-[1px] w-full"></div>
         </div>
-        <div class="shrink-0 bg-gray-200 h-[1px] w-full"></div>
-        <div class="p-4 lg:p-8">
+        <div class="p-4 lg:p-8 mt-[52px]">
           {% block content %}{% endblock %}
         </div>
       </main>

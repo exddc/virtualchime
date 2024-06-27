@@ -57,7 +57,7 @@ class WebServer(base.BaseAgent):
                 __video_port = os.environ.get("VIDEO_STREAM_PORT")
                 stream_url = f"http://{__hostaddress}:{__video_port}/stream.mjpg"
             except IndexError:
-                LOGGER.error("Failed to get the IP address.")
+                LOGGER.error("Failed to get the video stream URL.")
                 stream_url = None
             return render_template(
                 "dashboard.html",
