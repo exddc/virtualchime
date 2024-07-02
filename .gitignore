@@ -5,7 +5,7 @@ venv/
 __pycache__/
 logs/
 recordings/
-htmx.min.js
+*.min.js
 .webassets-cache/
 dist/
 images/
