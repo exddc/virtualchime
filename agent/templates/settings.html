@@ -1,34 +1,59 @@
 {% extends "layouts/base.html" %}
 
 {% block content %}
-<h1 class="font-bold text-lg mx-auto w-fit">Settings</h1>
-<form method="post" action="{{ url_for('settings') }}" class="mx-auto w-fit mt-6">
-    {% for section, settings in sections.items() %}
-        <h2 class="font-bold text-md mt-8">{{ section }}</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            {% for setting in settings %}
-                <div class="py-2">
-                    <label class="block mb-2 text-sm font-medium text-gray-900">{{ setting.key }}</label>
-                    {% if setting.options %}
-                        <select name="{{ setting.key }}" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
-                            {% for option in setting.options %}
-                                <option value="{{ option }}" {% if option == setting.value %}selected{% endif %}>
-                                    {{ option }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    {% else %}
-                        <input type="text" name="{{ setting.key }}" value="{{ setting.value }}" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
-                    {% endif %}
-                    {% if setting.description %}
-                        <p class="text-xs text-gray-600 pl-4">{{ setting.description }}</p>
-                    {% endif %}
-                </div>
+    <div class="flex flex-row items-start gap-12">
+        <div class="flex flex-col items-center justify-start min-w-[200px]">
+            <nav class="grid gap-1 w-full text-sm font-normal">
+            {% for section, settings in sections.items() %}
+                <a
+                x-data="{isActive: new URLSearchParams(window.location.search).get('section') === '{{ section }}' || !new URLSearchParams(window.location.search).get('section') && '{{ section }}' === 'General'}" 
+                :class="isActive ? 'bg-gray-200 text-black' : 'bg-white text-black'" 
+                class="hover:bg-gray-100 h-9 px-4 w-full flex items-center justify-start whitespace-nowrap rounded-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" 
+                href="/settings?section={{ section }}"
+                >
+                    <span class="ml-4">{{ section }}</</span>
+            </a>
             {% endfor %}
+            </nav>
         </div>
-    {% endfor %}
-    <div class="mt-12">
-        <button type="submit" class="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 me-2 mb-2">Save Changes</button>
+
+        <form method="post" action="{{ url_for('settings') }}" class="w-fit">
+            {% for section, settings in sections.items() %}
+                {% set current_section = request.args.get('section') %}
+                {% if not current_section %}
+                    {% set current_section = 'General' %}
+                {% endif %}
+                {% if section == current_section %}
+                    <h2 class="font-semibold text-lg mb-4">{{ section }}</h2>
+                    <div class="shrink-0 bg-gray-200 h-[1px] w-full"></div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-y-6 gap-x-16 mt-4">
+                        {% for setting in settings %}
+                            <div class="">
+                                <label class="block mb-2 text-sm font-medium text-gray-900">{{ setting.key }}</label>
+                                {% if setting.options %}
+                                    <select name="{{ setting.key }}" class="flex h-9 w-[350px] items-center justify-center rounded-md border border-#e4e4e7 bg-white px-3 py-2 text-sm placeholder:text-[#71717a] focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+                                        {% for option in setting.options %}
+                                            <option value="{{ option }}" {% if option == setting.value %}selected{% endif %}>
+                                                {{ option }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                {% elif setting.value|length > 50 %}
+                                    <textarea name="{{ setting.key }}" rows="4" class="flex w-[350px] items-center justify-center rounded-md border border-#e4e4e7 bg-white px-3 py-2 text-sm placeholder:text-[#71717a] focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">{{ setting.value }}</textarea>
+                                {% else %}
+                                    <input type="text" name="{{ setting.key }}" value="{{ setting.value }}" class="flex h-9 w-[350px] items-center justify-center rounded-md border border-#e4e4e7 bg-white px-3 py-2 text-sm placeholder:text-[#71717a] focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+                                {% endif %}
+                                {% if setting.description %}
+                                    <p class="text-xs text-gray-600">{{ setting.description }}</p>
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endfor %}
+            <div class="mt-6">
+                <button type="submit" class="text-white bg-black hover:bg-black/80 h-9 px-4 text-sm font-normal flex items-center justify-start whitespace-nowrap rounded-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">Save Changes</button>
+            </div>
+        </form>
     </div>
-</form>
 {% endblock content %}

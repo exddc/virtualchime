@@ -5,12 +5,12 @@
 
     <form hx-post="{{ url_for('logs') }}" hx-target="#log-container" hx-swap="outerHTML" class="flex flex-row gap-6 align-middle mt-4 justify-end">
             <label for="lines" class="block mt-2 text-sm font-semibold text-gray-900">Number of Lines</label>
-            <select name="lines" id="lines" class="flex h-9 w-[180px] items-center justify-center rounded-md border border-input bg-white px-3 py-2 text-sm placeholder:text-[#71717a] focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+            <select name="lines" id="lines" class="flex h-9 w-[180px] items-center justify-center rounded-md border border-#e4e4e7 bg-white px-3 py-2 text-sm placeholder:text-[#71717a] focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
                 <option value="25" {% if selected_lines == '25' %}selected{% endif %}>Last 25</option>
                 <option value="50" {% if selected_lines == '50' %}selected{% endif %}>Last 50</option>
                 <option value="200" {% if selected_lines == '200' %}selected{% endif %}>Last 200</option>
                 <option value="all" {% if selected_lines == 'all' %}selected{% endif %}>All</option>
             </select>
-            <button type="submit" class="text-white bg-black hover:bg-black/80 h-9 px-4 text-sm font-medium flex items-center justify-start whitespace-nowrap rounded-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">Update Logs</button>
+            <button type="submit" class="text-white bg-black hover:bg-black/80 h-9 px-4 text-sm font-normal flex items-center justify-start whitespace-nowrap rounded-md ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">Update Logs</button>
     </form>
 {% endblock content %}
