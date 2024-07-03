@@ -1,11 +1,14 @@
-<div id="log-container" class="max-w-7xl mx-auto rounded-lg border bg-white text-[#09090b] shadow-sm p-2 overflow-y-auto grid gap-1 max-h-[75vh]">
+<div id="log-container"
+    class="max-w-7xl mx-auto rounded-lg border bg-white text-[#09090b] shadow-sm p-2 overflow-y-auto grid gap-1 max-h-[75vh]">
     {% for line in logs %}
-        {% if 'ERROR' in line %}
-            <p class="text-red-600">{{ line }}</p>
-        {% elif 'WARNING' in line %}
-            <p class="text-yellow-600">{{ line }}</p>
-        {% else %}
-            <p>{{ line }}</p>
-        {% endif %}
+    {% if 'ERROR' in line %}
+    <p class="text-red-600">{{ line }}</p>
+    {% elif 'WARNING' in line %}
+    <p class="text-yellow-600">{{ line }}</p>
+    {% elif 'agent starting with version' in line %}
+    <p class="text-green-600">{{ line }}</p>
+    {% else %}
+    <p>{{ line }}</p>
+    {% endif %}
     {% endfor %}
 </div>

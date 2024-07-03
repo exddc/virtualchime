@@ -23,7 +23,6 @@ class WebServer(base.BaseAgent):
 
     def __init__(self, mqtt_client) -> None:
         """Initialize the webserver."""
-        LOGGER.info("Initializing webserver.")
         super().__init__(mqtt_client)
         self._location_topic = f"{self._mqtt_topic}/{self._agent_location}"
 
