@@ -99,22 +99,30 @@ class WebServer(base.BaseAgent):
                 LOGGER.info("Relay requested by %s", request.remote_addr)
                 pin_map_relays = json.loads(os.environ.get("PIN_MAP_RELAYS"))
                 relay_names = [relay["name"] for relay in pin_map_relays]
-                return render_template("partials/relay_view.html", relay_names=relay_names)
+                return render_template(
+                    "partials/relay_view.html", relay_names=relay_names
+                )
 
             LOGGER.info("Relay posted by %s", request.remote_addr)
             relay_name = request.form.get("relay_name")
             try:
-                self._mqtt.publish(f"relay/{self._agent_location}", json.dumps({
-                    "name": relay_name,
-                    "state": "toggle"
-                }))
+                self._mqtt.publish(
+                    f"relay/{self._agent_location}",
+                    json.dumps({"name": relay_name, "state": "toggle"}),
+                )
                 LOGGER.info("Relay toggled from the web interface.")
-                return render_template("partials/relay_button_message.html", message="Toggled", relay_name=relay_name)
+                return render_template(
+                    "partials/relay_button_message.html",
+                    message="Toggled",
+                    relay_name=relay_name,
+                )
             # pylint: disable=broad-except
             except Exception as error:
                 LOGGER.error("Error toggling relay from web interface: %s", error)
                 LOGGER.error("Requsted relay: %s", relay_name)
-                return render_template("partials/relay_button_message.html", message="Failed")
+                return render_template(
+                    "partials/relay_button_message.html", message="Failed"
+                )
 
     def run(self) -> None:
         """Run the webserver."""
@@ -191,7 +199,7 @@ class WebServer(base.BaseAgent):
                     }
                 )
 
-        LOGGER.info("Read .env file successfully.")
+        LOGGER.debug("Read .env file successfully.")
         return sections
 
     @staticmethod
@@ -227,7 +235,7 @@ class WebServer(base.BaseAgent):
                 else:
                     file.write(line)
 
-        LOGGER.info("Updated .env file successfully.")
+        LOGGER.debug("Updated .env file successfully.")
 
     @staticmethod
     def tail(file_path, lines=25):
