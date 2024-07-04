@@ -17,7 +17,7 @@ sudo apt-get install -y python3-prctl libatlas-base-dev ffmpeg libopenjp2-7 pyth
 echo "Installing python packages"
 pip3 install -r requirements.txt --break-system-packages
 
-# Download htmx and save it to the static folder
+# Download htmx and alpine.js and save it to the static folder
 echo "Downloading htmx"
 if [ -f static/src/htmx.min.js ]; then
     echo "htmx.min.js already exists. Do you want to overwrite it?"
@@ -29,6 +29,16 @@ if [ -f static/src/htmx.min.js ]; then
     fi
 fi
 
+echo "Downloading alpine.js"
+if [ -f static/src/alpine.min.js ]; then
+    echo "alpine.min.js already exists. Do you want to overwrite it?"
+    read -rn1 -p "Overwrite htmx.min.js? (y/n): " OVERWRITE_ALPINE
+    echo ""
+    if [ "$OVERWRITE_ALPINE" == "y" ]; then
+        rm static/src/htmx.min.js
+        wget -O static/src/alpine.min.js https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js
+    fi
+fi
 
 # Create a config file from user inputs
 # Check if .env already exists

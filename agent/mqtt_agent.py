@@ -57,7 +57,7 @@ class MqttAgent(paho.mqtt.client.Client):
         self.on_connect = LOGGER.info("Connected to MQTT Broker")
         self.on_disconnect = LOGGER.warning("Disconnected from MQTT Broker")
         LOGGER.debug(
-            "Connection Info: %s{}:%d",
+            "Connection Info: %s:%d",
             os.environ.get("MQTT_BROKER_IP"),
             int(os.environ.get("MQTT_BROKER_PORT")),
         )
