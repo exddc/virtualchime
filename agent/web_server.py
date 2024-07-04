@@ -3,6 +3,7 @@
 # pylint: disable=import-error
 import os
 import threading
+import json
 import dotenv
 import waitress
 from flask import Flask, render_template, request, redirect, url_for
@@ -87,11 +88,33 @@ class WebServer(base.BaseAgent):
             log_file_path = "./logs/agent.log"
             logs = self.tail(log_file_path, lines)
             if request.headers.get("HX-Request"):
-                LOGGER.debug("Returning partial log view.")
                 return render_template("partials/log_view.html", logs=logs)
             return render_template(
                 "logs.html", logs=logs, selected_lines=lines, page_title="Logs"
             )
+
+        @self.app.route("/relay", methods=["GET", "POST"])
+        def relay():
+            if request.method == "GET":
+                LOGGER.info("Relay requested by %s", request.remote_addr)
+                pin_map_relays = json.loads(os.environ.get("PIN_MAP_RELAYS"))
+                relay_names = [relay["name"] for relay in pin_map_relays]
+                return render_template("partials/relay_view.html", relay_names=relay_names)
+
+            LOGGER.info("Relay posted by %s", request.remote_addr)
+            relay_name = request.form.get("relay_name")
+            try:
+                self._mqtt.publish(f"relay/{self._agent_location}", json.dumps({
+                    "name": relay_name,
+                    "state": "toggle"
+                }))
+                LOGGER.info("Relay toggled from the web interface.")
+                return render_template("partials/relay_button_message.html", message="Toggled", relay_name=relay_name)
+            # pylint: disable=broad-except
+            except Exception as error:
+                LOGGER.error("Error toggling relay from web interface: %s", error)
+                LOGGER.error("Requsted relay: %s", relay_name)
+                return render_template("partials/relay_button_message.html", message="Failed")
 
     def run(self) -> None:
         """Run the webserver."""
