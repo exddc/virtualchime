@@ -56,6 +56,8 @@ Here is a list of the components that are planned for the future:
 -   Battery
 -   Various sensors (e.g. temperature, humidity, light, sound)
 
+Files for 3D printing the enclosure and the plans to build the hardware are available at the hardware repository at [virtualchime-hardware](https://github.com/exddc/virtualchime-hardware).
+
 ## Software
 
 The system is built in Python to make it easy to customize and extend. A simple web server is used to serve the live video stream and the configuration interface. The system is designed to be modular and extensible, so you can easily add new features and integrate with other systems.
