@@ -1,9 +1,8 @@
 """Button Agent that listens to button presses and publishes messages to the broker."""
 
-# pylint: disable=import-error
+# pylint: disable=import-error,consider-using-from-import
 import os
 import time
-import threading
 import datetime
 import json
 import logger
