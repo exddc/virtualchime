@@ -8,9 +8,11 @@ import datetime
 import json
 import logger
 import base
-import gpiozero
 import RPi.GPIO as GPIO
 
+# Set GPIO mode to BCM and clean up any previous configurations
+GPIO.setmode(GPIO.BCM)
+GPIO.cleanup()
 
 # Initialize logger
 LOGGER = logger.get_module_logger(__name__)
@@ -44,12 +46,21 @@ class DoorbellAgent(base.BaseAgent):
                 LOGGER.debug(
                     "Initializing button-listener for floor: %s", floor["name"]
                 )
-                button = gpiozero.Button(
-                    pin, pull_up=os.environ.get("PIN_PULL_UP_MODE") == "True"
+
+                if os.environ.get("PIN_PULL_UP_MODE") == "True":
+                    GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+                else:
+                    GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+
+                # Add event detection
+                GPIO.add_event_detect(
+                    pin,
+                    GPIO.FALLING,
+                    callback=lambda channel, floor=floor_name: self._on_button_pressed(
+                        floor
+                    ),
+                    bouncetime=300,
                 )
-                threading.Thread(
-                    target=self.button_listener, args=(floor_name, button), daemon=True
-                ).start()
         # pylint: disable=broad-except
         except Exception as e:
             LOGGER.error("Failed to initialize button-listeners: %s", str(e))
