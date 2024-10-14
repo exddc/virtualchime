@@ -12,7 +12,6 @@ import RPi.GPIO as GPIO
 
 # Set GPIO mode to BCM and clean up any previous configurations
 GPIO.setmode(GPIO.BCM)
-GPIO.cleanup()
 
 # Initialize logger
 LOGGER = logger.get_module_logger(__name__)
