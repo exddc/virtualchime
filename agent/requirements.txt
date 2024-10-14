@@ -1,4 +1,3 @@
-gpiozero
 python-dotenv
 paho-mqtt==1.6.1
 RPi.GPIO
