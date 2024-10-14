@@ -10,9 +10,6 @@ import logger
 import base
 import RPi.GPIO as GPIO
 
-# Set GPIO mode to BCM and clean up any previous configurations
-GPIO.setmode(GPIO.BCM)
-
 # Initialize logger
 LOGGER = logger.get_module_logger(__name__)
 
@@ -24,6 +21,9 @@ class DoorbellAgent(base.BaseAgent):
         """Initialize the agent with the MQTT client."""
         super().__init__(mqtt_client)
         self._location_topic = f"{self._mqtt_topic}/{self._agent_location}"
+
+        # Set GPIO mode to BCM
+        GPIO.setmode(GPIO.BCM)
 
     def run(self):
         """Subscribe to the mqtt topic and start listening for button presses."""
