@@ -9,6 +9,7 @@ import json
 import logger
 import base
 import gpiozero
+import RPi.GPIO as GPIO
 
 
 # Initialize logger
@@ -43,22 +44,22 @@ class DoorbellAgent(base.BaseAgent):
                 LOGGER.debug(
                     "Initializing button-listener for floor: %s", floor["name"]
                 )
+                button = gpiozero.Button(
+                    pin, pull_up=os.environ.get("PIN_PULL_UP_MODE") == "True"
+                )
                 threading.Thread(
-                    target=self.button_listener, args=(floor_name, pin), daemon=True
+                    target=self.button_listener, args=(floor_name, button), daemon=True
                 ).start()
         # pylint: disable=broad-except
         except Exception as e:
             LOGGER.error("Failed to initialize button-listeners: %s", str(e))
 
-    def button_listener(self, floor_name, pin):
+    def button_listener(self, floor_name, button):
         """Listen for button presses and publish a message to the broker when a button is pressed.
 
         param floor_name: The name of the floor the button is located on.
-        param pin: The GPIO pin the button is connected to.
+        param button: The gpiozero.Button object for the button.
         """
-        button = gpiozero.Button(
-            pin, pull_up=os.environ.get("PIN_PULL_UP_MODE") == "True"
-        )
         last_pressed = datetime.datetime(1970, 1, 1)
 
         while True:
@@ -119,4 +120,5 @@ class DoorbellAgent(base.BaseAgent):
         """Stop the agent."""
         self._mqtt.unsubscribe(self._location_topic)
         self._mqtt.message_callback_remove(self._location_topic)
+        GPIO.cleanup()
         LOGGER.info("Agent stopped")
