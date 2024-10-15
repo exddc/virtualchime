@@ -6,7 +6,7 @@ import threading
 import json
 import dotenv
 import waitress
-from flask import Flask, render_template, request, redirect, url_for
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory
 from flask_assets import Environment, Bundle
 import base
 import logger
@@ -53,17 +53,21 @@ class WebServer(base.BaseAgent):
         def dashboard():
             LOGGER.info("Dashboard requested by %s", request.remote_addr)
             try:
-                __hostaddress = os.popen("hostname -I").read().split()[0]
-                __video_port = os.environ.get("VIDEO_STREAM_PORT")
-                stream_url = f"http://{__hostaddress}:{__video_port}/stream.mjpg"
+                # Serve the HLS stream
+                stream_url = f"/hls/stream.m3u8"
             except IndexError:
-                LOGGER.error("Failed to get the video stream URL.")
+                LOGGER.error("Failed to get the HLS stream URL.")
                 stream_url = None
             return render_template(
                 "dashboard.html",
                 stream_url=stream_url,
                 page_title="Dashboard",
             )
+        
+        @self.app.route("/hls/<path:filename>")
+        def hls_stream(filename):
+            """Serve the HLS .m3u8 playlist and .ts segments."""
+            return send_from_directory("hls", filename)
 
         @self.app.route("/settings", methods=["GET", "POST"])
         def settings():

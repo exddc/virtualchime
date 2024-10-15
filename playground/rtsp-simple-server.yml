@@ -1,0 +1,6 @@
+paths:
+  live:
+    source: publisher
+    publish:
+      runOnInit: ffmpeg -f v4l2 -i /dev/video0 -c:v copy -f rtsp rtsp://localhost:8554/live
+      runOnInitRestart: yes

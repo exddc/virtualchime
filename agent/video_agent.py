@@ -2,7 +2,6 @@
 
 # pylint: disable=import-error, broad-except
 import os
-import subprocess
 import threading
 import logger
 import base
@@ -107,9 +106,9 @@ class VideoAgent(base.BaseAgent):
         if self._rtsp_thread and self._rtsp_thread.is_alive():
             LOGGER.warning("RTSP server thread already running.")
             return
-        
+
         LOGGER.info("Starting RTSP server thread...")
-        self._rtsp_server = rtsp_server.RTSPServer()
+        self._rtsp_server = rtsp_server.StreamServer()
         self._rtsp_thread = threading.Thread(target=self._rtsp_server.run, daemon=True)
         self._rtsp_thread.start()
         LOGGER.info("RTSP server thread started.")
@@ -121,4 +120,3 @@ class VideoAgent(base.BaseAgent):
             self._rtsp_server.stop()
             self._rtsp_server = None
             LOGGER.info("RTSP server stopped.")
-
