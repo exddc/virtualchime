@@ -12,7 +12,6 @@ import RPi.GPIO as GPIO
 # Initialize logger
 LOGGER = logger.get_module_logger(__name__)
 
-
 class DoorbellAgent(base.BaseAgent):
     """Button Agent that listens to button presses and publishes messages to the broker."""
 
@@ -23,6 +22,14 @@ class DoorbellAgent(base.BaseAgent):
 
         # Set GPIO mode to BCM
         GPIO.setmode(GPIO.BCM)
+
+        self._pin_pullup_mode = GPIO.PUD_UP if os.environ.get("PIN_PULL_UP_MODE") == "True" else GPIO.PUD_DOWN
+        self._debounce_time = float(os.environ.get("PIN_DOORBELL_DEBOUNCE_TIME", 10))
+
+        # Initialize button press tracking
+        self._press_count = {}
+        self._last_press_time = {}
+        self._stuck_threshold = 3
 
     def run(self):
         """Subscribe to the mqtt topic and start listening for button presses."""
@@ -45,10 +52,7 @@ class DoorbellAgent(base.BaseAgent):
                     "Initializing button-listener for floor: %s", floor["name"]
                 )
 
-                if os.environ.get("PIN_PULL_UP_MODE") == "True":
-                    GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-                else:
-                    GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+                GPIO.setup(pin, GPIO.IN, pull_up_down=self._pin_pullup_mode)
 
                 # Add event detection
                 GPIO.add_event_detect(
@@ -57,46 +61,45 @@ class DoorbellAgent(base.BaseAgent):
                     callback=lambda channel, floor=floor_name: self._on_button_pressed(
                         floor
                     ),
-                    bouncetime=300,
+                    bouncetime=int(self._debounce_time * 1000),
                 )
-        # pylint: disable=broad-except
+
+                # Initialize press count and time tracking for each floor
+                self._press_count[floor_name] = 0
+                self._last_press_time[floor_name] = 0  # Start with a timestamp of 0
+
         except Exception as e:
             LOGGER.error("Failed to initialize button-listeners: %s", str(e))
 
-    def button_listener(self, floor_name, button):
-        """Listen for button presses and publish a message to the broker when a button is pressed.
-
-        param floor_name: The name of the floor the button is located on.
-        param button: The gpiozero.Button object for the button.
-        """
-        last_pressed = datetime.datetime(1970, 1, 1)
-
-        while True:
-            if button.is_pressed:
-                LOGGER.debug("Button %s pressed", floor_name)
-                if self.check_press_trigger(last_pressed):
-                    continue
-
-                last_pressed = datetime.datetime.now()
-
-                self._on_button_pressed(floor_name)
-                time.sleep(0.1)
-
-    # pylint: disable=unused-argument
-    def _on_doorbell_message(self, client, userdata, msg):
-        """Process the doorbell message.
-
-        param client: The client instance for this callback.
-        param userdata: The private user data as set in Client() or userdata_set().
-        param msg: An instance of MQTTMessage.
-        """
-        LOGGER.info("Mqtt message received: %s", msg.payload.decode("utf-8"))
-
     def _on_button_pressed(self, floor_name):
-        """Publish a message to the broker when a button is pressed.
+        """Handle button press events with detection of stuck buttons.
 
         param floor_name: The name of the floor the button is located on.
         """
+        current_time = time.time()
+        time_since_last_press = current_time - self._last_press_time[floor_name]
+
+        LOGGER.debug("Button %s pressed at %s", floor_name, datetime.datetime.now())
+
+        # Reset the press count if more time than the debounce time has passed
+        if time_since_last_press > self._debounce_time:
+            LOGGER.debug("Resetting press count due to timeout for floor: %s", floor_name)
+            self._press_count[floor_name] = 0
+
+        # Increment the press count for the floor
+        self._press_count[floor_name] += 1
+        self._last_press_time[floor_name] = current_time
+
+        if self._press_count[floor_name] > self._stuck_threshold:
+            LOGGER.error(
+                "Button %s seems to be stuck! Pressed %s times within %s seconds.",
+                floor_name,
+                self._press_count[floor_name],
+                self._debounce_time,
+            )
+            return  # Do not send a press message when the button is stuck
+
+        # Publish the press event if the button is not stuck
         LOGGER.info(
             "%s: Button %s pressed at %s",
             self._agent_location,
@@ -114,16 +117,16 @@ class DoorbellAgent(base.BaseAgent):
                 }
             ),
         )
+    
+    # pylint: disable=unused-argument
+    def _on_doorbell_message(self, client, userdata, msg):
+        """Process the doorbell message.
 
-    @staticmethod
-    def check_press_trigger(last_pressed):
-        """Check if the button press is a trigger or a bounce.
-
-        param last_pressed: The last time the button was pressed.
+        param client: The client instance for this callback.
+        param userdata: The private user data as set in Client() or userdata_set().
+        param msg: An instance of MQTTMessage.
         """
-        if (datetime.datetime.now() - last_pressed).total_seconds() < 5:
-            return True
-        return False
+        LOGGER.info("Mqtt message received: %s", msg.payload.decode("utf-8"))
 
     def stop(self):
         """Stop the agent."""
