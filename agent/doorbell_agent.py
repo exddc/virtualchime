@@ -1,15 +1,13 @@
 """Button Agent that listens to button presses and publishes messages to the broker."""
 
-# pylint: disable=import-error
+# pylint: disable=import-error,consider-using-from-import
 import os
 import time
-import threading
 import datetime
 import json
 import logger
 import base
-import gpiozero
-
+import RPi.GPIO as GPIO
 
 # Initialize logger
 LOGGER = logger.get_module_logger(__name__)
@@ -22,6 +20,9 @@ class DoorbellAgent(base.BaseAgent):
         """Initialize the agent with the MQTT client."""
         super().__init__(mqtt_client)
         self._location_topic = f"{self._mqtt_topic}/{self._agent_location}"
+
+        # Set GPIO mode to BCM
+        GPIO.setmode(GPIO.BCM)
 
     def run(self):
         """Subscribe to the mqtt topic and start listening for button presses."""
@@ -43,22 +44,31 @@ class DoorbellAgent(base.BaseAgent):
                 LOGGER.debug(
                     "Initializing button-listener for floor: %s", floor["name"]
                 )
-                threading.Thread(
-                    target=self.button_listener, args=(floor_name, pin), daemon=True
-                ).start()
+
+                if os.environ.get("PIN_PULL_UP_MODE") == "True":
+                    GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+                else:
+                    GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+
+                # Add event detection
+                GPIO.add_event_detect(
+                    pin,
+                    GPIO.FALLING,
+                    callback=lambda channel, floor=floor_name: self._on_button_pressed(
+                        floor
+                    ),
+                    bouncetime=300,
+                )
         # pylint: disable=broad-except
         except Exception as e:
             LOGGER.error("Failed to initialize button-listeners: %s", str(e))
 
-    def button_listener(self, floor_name, pin):
+    def button_listener(self, floor_name, button):
         """Listen for button presses and publish a message to the broker when a button is pressed.
 
         param floor_name: The name of the floor the button is located on.
-        param pin: The GPIO pin the button is connected to.
+        param button: The gpiozero.Button object for the button.
         """
-        button = gpiozero.Button(
-            pin, pull_up=os.environ.get("PIN_PULL_UP_MODE") == "True"
-        )
         last_pressed = datetime.datetime(1970, 1, 1)
 
         while True:
@@ -119,4 +129,5 @@ class DoorbellAgent(base.BaseAgent):
         """Stop the agent."""
         self._mqtt.unsubscribe(self._location_topic)
         self._mqtt.message_callback_remove(self._location_topic)
+        GPIO.cleanup()
         LOGGER.info("Agent stopped")
