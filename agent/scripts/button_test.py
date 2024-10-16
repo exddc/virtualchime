@@ -2,6 +2,7 @@
 
 # pylint: disable=import-error,consider-using-from-import
 import os
+import sys
 import json
 from signal import pause
 import RPi.GPIO as GPIO
@@ -31,4 +32,4 @@ try:
 except KeyboardInterrupt:
     GPIO.cleanup()
     print("Exiting...")
-    exit(0)
+    sys.exit(0)
