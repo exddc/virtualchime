@@ -12,6 +12,7 @@ echo "Installing needed apt packages"
 sudo apt-get update
 sudo apt-get install -y python3 python3-venv python3-pip python3-libcamera python3-kms++
 sudo apt-get install -y python3-prctl libatlas-base-dev ffmpeg libopenjp2-7 python3-pip
+sudo apt-get install -y python3-dotenv python3-paho-mqtt python3-waitress python3-flask python3-rpi-lgpio
 
 # Install python packages
 echo "Installing python packages"

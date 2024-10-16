@@ -1,8 +1,7 @@
 """Button Agent that listens to button presses and publishes messages to the broker."""
 
-# pylint: disable=import-error,consider-using-from-import
+# pylint: disable=import-error,consider-using-from-import,line-too-long
 import os
-import time
 import datetime
 import json
 import logger
@@ -12,7 +11,6 @@ import RPi.GPIO as GPIO
 # Initialize logger
 LOGGER = logger.get_module_logger(__name__)
 
-
 class DoorbellAgent(base.BaseAgent):
     """Button Agent that listens to button presses and publishes messages to the broker."""
 
@@ -21,8 +19,14 @@ class DoorbellAgent(base.BaseAgent):
         super().__init__(mqtt_client)
         self._location_topic = f"{self._mqtt_topic}/{self._agent_location}"
 
-        # Set GPIO mode to BCM
+        # Button Configuration
         GPIO.setmode(GPIO.BCM)
+
+        self._pin_pullup_mode = GPIO.PUD_UP if os.environ.get("PIN_PULL_UP_MODE") == "True" else GPIO.PUD_DOWN
+        self._debounce_time = int(os.environ.get("PIN_DOORBELL_DEBOUNCE_TIME", 1000))
+
+        self._last_press_time = {}
+        self._stuck_button_count = {}
 
     def run(self):
         """Subscribe to the mqtt topic and start listening for button presses."""
@@ -45,42 +49,69 @@ class DoorbellAgent(base.BaseAgent):
                     "Initializing button-listener for floor: %s", floor["name"]
                 )
 
-                if os.environ.get("PIN_PULL_UP_MODE") == "True":
-                    GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-                else:
-                    GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+                GPIO.setup(pin, GPIO.IN, pull_up_down=self._pin_pullup_mode)
 
-                # Add event detection
                 GPIO.add_event_detect(
                     pin,
                     GPIO.FALLING,
                     callback=lambda channel, floor=floor_name: self._on_button_pressed(
                         floor
-                    ),
-                    bouncetime=300,
+                    )
                 )
+
+                # Initialize press tracking for each floor
+                self._last_press_time[floor_name] = datetime.datetime.now()
+                self._stuck_button_count[floor_name] = 0
+
         # pylint: disable=broad-except
         except Exception as e:
             LOGGER.error("Failed to initialize button-listeners: %s", str(e))
 
-    def button_listener(self, floor_name, button):
-        """Listen for button presses and publish a message to the broker when a button is pressed.
+    def _on_button_pressed(self, floor_name):
+        """Handle button press events with detection of stuck buttons.
 
         param floor_name: The name of the floor the button is located on.
-        param button: The gpiozero.Button object for the button.
         """
-        last_pressed = datetime.datetime(1970, 1, 1)
 
-        while True:
-            if button.is_pressed:
-                LOGGER.debug("Button %s pressed", floor_name)
-                if self.check_press_trigger(last_pressed):
-                    continue
+        LOGGER.info(
+            "%s: Button %s pressed at %s",
+            self._agent_location,
+            floor_name,
+            datetime.datetime.now(),
+        )
 
-                last_pressed = datetime.datetime.now()
+        if self.check_press_trigger(self._last_press_time[floor_name]):
+            self._mqtt.publish(
+                    f"{self._mqtt_topic}/{floor_name}/{self._agent_location}",
+                    json.dumps(
+                        {
+                            "state": "pressed",
+                            "timestamp": str(datetime.datetime.now()),
+                            "location": self._agent_location,
+                            "floor": floor_name,
+                        }
+                    ),
+                )
+            self._stuck_button_count[floor_name] = 0
+        else:
+            self._stuck_button_count[floor_name] += 1
+            if self._stuck_button_count[floor_name] > 50:
+                LOGGER.error(
+                    "%s: Button %s is stuck",
+                    self._agent_location,
+                    floor_name,
+                )
+                self._stuck_button_count[floor_name] = 0
 
-                self._on_button_pressed(floor_name)
-                time.sleep(0.1)
+        self._last_press_time[floor_name] = datetime.datetime.now()
+
+    def check_press_trigger(self, last_pressed):
+        """Check if the button press is a trigger or a bounce.
+        param last_pressed: The last time the button was pressed.
+        """
+        if (datetime.datetime.now() - last_pressed).total_seconds() > self._debounce_time:
+            return True
+        return False
 
     # pylint: disable=unused-argument
     def _on_doorbell_message(self, client, userdata, msg):
@@ -91,39 +122,6 @@ class DoorbellAgent(base.BaseAgent):
         param msg: An instance of MQTTMessage.
         """
         LOGGER.info("Mqtt message received: %s", msg.payload.decode("utf-8"))
-
-    def _on_button_pressed(self, floor_name):
-        """Publish a message to the broker when a button is pressed.
-
-        param floor_name: The name of the floor the button is located on.
-        """
-        LOGGER.info(
-            "%s: Button %s pressed at %s",
-            self._agent_location,
-            floor_name,
-            datetime.datetime.now(),
-        )
-        self._mqtt.publish(
-            f"{self._mqtt_topic}/{floor_name}/{self._agent_location}",
-            json.dumps(
-                {
-                    "state": "pressed",
-                    "timestamp": str(datetime.datetime.now()),
-                    "location": self._agent_location,
-                    "floor": floor_name,
-                }
-            ),
-        )
-
-    @staticmethod
-    def check_press_trigger(last_pressed):
-        """Check if the button press is a trigger or a bounce.
-
-        param last_pressed: The last time the button was pressed.
-        """
-        if (datetime.datetime.now() - last_pressed).total_seconds() < 5:
-            return True
-        return False
 
     def stop(self):
         """Stop the agent."""
