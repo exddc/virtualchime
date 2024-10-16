@@ -1,30 +1,32 @@
-from gpiozero import Button
+""" Test script for button press event detection and mapping to floors. """
+
+import RPi.GPIO as GPIO
 from signal import pause
+import dotenv
+import os
+import json
 
-# Assign your GPIO pins for the buttons
-BUTTON_1_PIN = 17  # Replace with your actual GPIO pin number
-BUTTON_2_PIN = 27  # Replace with your actual GPIO pin number
-BUTTON_3_PIN = 22  # Replace with your actual GPIO pin number
+dotenv.load_dotenv()
+GPIO.setmode(GPIO.BCM)
 
-# Create button objects
-button1 = Button(BUTTON_1_PIN)
-button2 = Button(BUTTON_2_PIN)
-button3 = Button(BUTTON_3_PIN)
+_pin_pullup_mode = GPIO.PUD_UP if os.environ.get("PIN_PULL_UP_MODE") == "True" else GPIO.PUD_DOWN
+_pin_map_floors = json.loads(os.environ.get("PIN_MAP_FLOORS"))
 
-# Define button press callback functions
-def on_button_1_pressed():
-    print("Button 1 pressed")
+try:
+    for floor in _pin_map_floors:
+        __floor_name = floor["name"]
+        __pin = floor["pin"]
+        print(f"Initializing button for floor: {__floor_name}")
 
-def on_button_2_pressed():
-    print("Button 2 pressed")
+        GPIO.setup(__pin, GPIO.IN, pull_up_down=_pin_pullup_mode)
 
-def on_button_3_pressed():
-    print("Button 3 pressed")
-
-# Attach the button press events
-button1.when_pressed = on_button_1_pressed
-button2.when_pressed = on_button_2_pressed
-button3.when_pressed = on_button_3_pressed
-
-# Keep the script running to listen for button presses
-pause()
+        GPIO.add_event_detect(
+            __pin,
+            GPIO.FALLING,
+            callback=lambda channel, floor=__floor_name: print(f"Button pressed on floor: {floor}")
+        )
+    pause()
+except KeyboardInterrupt:
+    GPIO.cleanup()
+    print("Exiting...")
+    exit(0)
