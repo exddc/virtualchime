@@ -1,8 +1,7 @@
 """Button Agent that listens to button presses and publishes messages to the broker."""
 
-# pylint: disable=import-error,consider-using-from-import
+# pylint: disable=import-error,consider-using-from-import,line-too-long
 import os
-import time
 import datetime
 import json
 import logger
@@ -64,6 +63,7 @@ class DoorbellAgent(base.BaseAgent):
                 self._last_press_time[floor_name] = datetime.datetime.now()
                 self._stuck_button_count[floor_name] = 0
 
+        # pylint: disable=broad-except
         except Exception as e:
             LOGGER.error("Failed to initialize button-listeners: %s", str(e))
 
@@ -112,7 +112,7 @@ class DoorbellAgent(base.BaseAgent):
         if (datetime.datetime.now() - last_pressed).total_seconds() > self._debounce_time:
             return True
         return False
-    
+
     # pylint: disable=unused-argument
     def _on_doorbell_message(self, client, userdata, msg):
         """Process the doorbell message.

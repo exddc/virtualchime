@@ -1,10 +1,12 @@
 """ Test script for button press event detection and mapping to floors. """
 
-import RPi.GPIO as GPIO
-from signal import pause
-import dotenv
+# pylint: disable=import-error,consider-using-from-import
 import os
 import json
+from signal import pause
+import RPi.GPIO as GPIO
+import dotenv
+
 
 dotenv.load_dotenv()
 GPIO.setmode(GPIO.BCM)
