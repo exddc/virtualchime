@@ -113,7 +113,7 @@ class Agent:
     def _check_internet_connection(self):
         """Thread to check the internet connection and publish the status to the MQTT broker."""
         while True:
-            if os.system("ping -c 1 www.google.com") == 0:
+            if os.system("ping -c 1 www.google.com > /dev/null 2>&1") == 0:
                 if not self._has_internet:
                     LOGGER.info("Internet connection established.")
                 self._has_internet = True
