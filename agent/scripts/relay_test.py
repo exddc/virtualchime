@@ -5,7 +5,6 @@ import os
 import sys
 import json
 import time
-from signal import pause
 import RPi.GPIO as GPIO
 import dotenv
 

@@ -1,6 +1,6 @@
 """Relay agent that listens to messages from the broker and switches the relays on or off."""
 
-# pylint: disable=import-error
+# pylint: disable=import-error,consider-using-from-import
 import datetime
 import time
 import json
@@ -49,7 +49,6 @@ class RelayAgent(base.BaseAgent):
                 self._relays.append({"name": __relay_name, "pin": __pin})
         except KeyError as e:
             LOGGER.error("Error initialising relays: %s", e)
-            return
 
     # pylint: disable=unused-argument
     def _on_relay_message(self, client, userdata, msg):
@@ -83,12 +82,12 @@ class RelayAgent(base.BaseAgent):
         else:
             LOGGER.error("Empty relay message received")
 
-    def _toggle_relay(self, relay):
+    def _toggle_relay(self, relay_name):
         """Toggle the relay."""
         for relay in self._relays:
             __relay_name = relay["name"]
             __pin = relay["pin"]
-            if __relay_name == relay:
+            if __relay_name == relay_name:
                 try:
                     GPIO.output(__pin, not GPIO.input(__pin))
                     LOGGER.info("Relay %s toggled", __relay_name)
@@ -124,12 +123,12 @@ class RelayAgent(base.BaseAgent):
                 except Exception as e:
                     LOGGER.error("Failed to access relay %s: %s", __relay_name, str(e))
 
-    def _get_relay_status(self, relay):
+    def _get_relay_status(self, relay_name):
         """Get the status of the relay."""
         for relay in self._relays:
             __relay_name = relay["name"]
             __pin = relay["pin"]
-            if __relay_name == relay:
+            if __relay_name == relay_name:
                 try:
                     self._mqtt.publish(
                         f"relay/{self._agent_location}/{__relay_name}",
