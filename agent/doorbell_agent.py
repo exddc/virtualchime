@@ -11,6 +11,7 @@ import RPi.GPIO as GPIO
 # Initialize logger
 LOGGER = logger.get_module_logger(__name__)
 
+
 class DoorbellAgent(base.BaseAgent):
     """Button Agent that listens to button presses and publishes messages to the broker."""
 
@@ -22,7 +23,11 @@ class DoorbellAgent(base.BaseAgent):
         # Button Configuration
         GPIO.setmode(GPIO.BCM)
 
-        self._pin_pullup_mode = GPIO.PUD_UP if os.environ.get("PIN_PULL_UP_MODE") == "True" else GPIO.PUD_DOWN
+        self._pin_pullup_mode = (
+            GPIO.PUD_UP
+            if os.environ.get("PIN_PULL_UP_MODE") == "True"
+            else GPIO.PUD_DOWN
+        )
         self._debounce_time = int(os.environ.get("PIN_DOORBELL_DEBOUNCE_TIME", 1000))
 
         self._last_press_time = {}
@@ -56,7 +61,7 @@ class DoorbellAgent(base.BaseAgent):
                     GPIO.FALLING,
                     callback=lambda channel, floor=floor_name: self._on_button_pressed(
                         floor
-                    )
+                    ),
                 )
 
                 # Initialize press tracking for each floor
@@ -82,17 +87,18 @@ class DoorbellAgent(base.BaseAgent):
 
         if self.check_press_trigger(self._last_press_time[floor_name]):
             self._mqtt.publish(
-                    f"{self._mqtt_topic}/{floor_name}/{self._agent_location}",
-                    json.dumps(
-                        {
-                            "state": "pressed",
-                            "timestamp": str(datetime.datetime.now()),
-                            "location": self._agent_location,
-                            "floor": floor_name,
-                        }
-                    ),
-                )
+                f"{self._mqtt_topic}/{floor_name}/{self._agent_location}",
+                json.dumps(
+                    {
+                        "state": "pressed",
+                        "timestamp": str(datetime.datetime.now()),
+                        "location": self._agent_location,
+                        "floor": floor_name,
+                    }
+                ),
+            )
             self._stuck_button_count[floor_name] = 0
+            self._last_press_time[floor_name] = datetime.datetime.now()
         else:
             self._stuck_button_count[floor_name] += 1
             if self._stuck_button_count[floor_name] > 50:
@@ -103,13 +109,13 @@ class DoorbellAgent(base.BaseAgent):
                 )
                 self._stuck_button_count[floor_name] = 0
 
-        self._last_press_time[floor_name] = datetime.datetime.now()
-
     def check_press_trigger(self, last_pressed):
         """Check if the button press is a trigger or a bounce.
         param last_pressed: The last time the button was pressed.
         """
-        if (datetime.datetime.now() - last_pressed).total_seconds() > self._debounce_time:
+        if (
+            datetime.datetime.now() - last_pressed
+        ).total_seconds() > self._debounce_time:
             return True
         return False
 
