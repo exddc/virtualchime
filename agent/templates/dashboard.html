@@ -5,7 +5,11 @@
     <div class="max-w-7xl mx-auto rounded-lg border bg-white text-[#09090b] shadow-sm p-2">
         {% if stream_url %}
         <div class="flex items-center justify-center min-h-96 bg-slate-100 rounded-md">
-            <img src="{{ stream_url }}" class="w-full h-full object-cover rounded-md" alt="Doorbell Video Stream">
+            <!-- HTML5 Video element for HLS stream -->
+            <video controls autoplay width="640" height="480" class="rounded-md">
+                <source src="{{ stream_url }}" type="application/vnd.apple.mpegurl">
+                Your browser does not support the video tag or HLS streaming.
+            </video>
         </div>
         {% else %}
         <div class="flex items-center justify-center h-[30rem] bg-gray-600 rounded-md">
