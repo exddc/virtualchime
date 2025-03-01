@@ -1,0 +1,86 @@
+[tool.poetry]
+name = "virtualchime-button-service"
+version = "0.0.1"
+description = "Button Service for the VirtualChime system."
+authors = ["Timo Weiss <timo.weiss@protonmail.ch>"]
+license = "MIT"
+readme = "README.md"
+
+[project.urls]
+homepage = "https://virtualchime.com"
+repository = "https://github.com/exddc/virtualchime"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+loguru = "^0.7.3"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.4"
+ruff = "^0.9.9"
+bandit = "^1.8.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+addopts = "-vvv"
+testpaths = "tests"
+
+[tool.ruff]
+extend-exclude = [
+    "__pycache__",
+    "build",
+    "dist",
+]
+target-version = "py311"
+line-length = 90
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+extend-select = [
+    "C4",
+    "D200",
+    "D201",
+    "D204",
+    "D205",
+    "D206",
+    "D210",
+    "D211",
+    "D213",
+    "D300",
+    "D400",
+    "D402",
+    "D403",
+    "D404",
+    "D419",
+    "E",
+    "F",
+    "G010",
+    "I",
+    "INP001",
+    "N805",
+    "PERF101",
+    "PERF102",
+    "PERF401",
+    "PERF402",
+    "PGH004",
+    "PGH005",
+    "PIE794",
+    "PIE796",
+    "PIE807",
+    "PIE810",
+    "RET502",
+    "RET503",
+    "RET504",
+    "RET505",
+    "RUF015",
+    "RUF100",
+    "S101",
+    "T20",
+    "UP",
+    "W",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*.py" = ["S101"]
