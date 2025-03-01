@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "virtualchime"
+name = "virtualchime-agent"
 version = "0.0.1"
-description = "Open Source Smart Doorbell System for the Raspberry Pi"
+description = "Management agent for the VirtualChime system."
 authors = ["Timo Weiss <timo.weiss@protonmail.ch>"]
 license = "MIT"
 readme = "README.md"
@@ -12,6 +12,7 @@ repository = "https://github.com/exddc/virtualchime"
 
 [tool.poetry.dependencies]
 python = "^3.11"
+loguru = "^0.7.3"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.4"
