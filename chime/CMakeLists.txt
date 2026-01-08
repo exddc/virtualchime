@@ -8,6 +8,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(MOSQ REQUIRED libmosquitto)
 
 add_executable(chime src/main.cpp)
+target_compile_options(chime PRIVATE -Wall -Wextra -Wpedantic)
 target_include_directories(chime PRIVATE ${MOSQ_INCLUDE_DIRS})
 target_link_libraries(chime PRIVATE ${MOSQ_LIBRARIES})
 target_compile_options(chime PRIVATE ${MOSQ_CFLAGS_OTHER})
