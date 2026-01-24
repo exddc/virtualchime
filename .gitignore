@@ -1,12 +1,28 @@
+# Python
 .env
 .venv/
 .venv*/
 venv/
 __pycache__/
+
+# Yocto
+yocto/build*/
+yocto/**/tmp/
+yocto/**/sstate-cache/
+yocto/**/downloads/
+
+# CMake
+**/build/
+**/build-arm/
+
+# General
+*.log
 logs/
-recordings/
-*.min.js
-.webassets-cache/
-dist/
-images/
-hls/
+**logs/
+
+# Buildroot secrets
+buildroot/board/raspberrypi0w/rootfs_overlay/etc/wpa_supplicant/wpa_supplicant.conf
+buildroot/board/raspberrypi0w/rootfs_overlay/root/.ssh/authorized_keys
+
+# Buildroot build output
+buildroot/output/
