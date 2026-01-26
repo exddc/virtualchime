@@ -1,2 +1,6 @@
 #include <iostream>
-#include <mosquitto.h>
+
+int main() {
+  std::cout << "I'm alive!\n";
+  return 0;
+}

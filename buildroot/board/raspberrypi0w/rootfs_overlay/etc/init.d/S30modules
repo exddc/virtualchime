@@ -1,0 +1,38 @@
+#!/bin/sh
+
+case "$1" in
+    start)
+        printf "Loading kernel modules: "
+        
+        # Run depmod if not done yet
+        if [ ! -f /lib/modules/$(uname -r)/modules.dep ] || \
+           [ ! -s /lib/modules/$(uname -r)/modules.dep ]; then
+            depmod -a
+        fi
+        
+        # Load WiFi modules
+        modprobe brcmfmac 2>/dev/null || true
+        
+        # Wait for wlan0 to appear
+        for i in 1 2 3 4 5; do
+            if [ -d /sys/class/net/wlan0 ]; then
+                break
+            fi
+            sleep 1
+        done
+        
+        if [ -d /sys/class/net/wlan0 ]; then
+            echo "OK (wlan0 ready)"
+        else
+            echo "WARN (wlan0 not found)"
+        fi
+        ;;
+    stop)
+        ;;
+    *)
+        echo "Usage: $0 {start|stop}"
+        exit 1
+        ;;
+esac
+
+exit 0

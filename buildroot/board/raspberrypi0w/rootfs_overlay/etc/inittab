@@ -1,0 +1,27 @@
+# /etc/inittab
+#
+# Format: <id>:<runlevels>:<action>:<process>
+
+# System initialization
+::sysinit:/bin/mount -t proc proc /proc
+::sysinit:/bin/mount -o remount,rw /
+::sysinit:/bin/mkdir -p /dev/pts /dev/shm
+::sysinit:/bin/mount -a
+::sysinit:/bin/mkdir -p /run/lock /var/lock
+::sysinit:/sbin/swapon -a
+::sysinit:/bin/hostname -F /etc/hostname
+::sysinit:/etc/init.d/rcS
+
+# Serial console
+::respawn:/sbin/getty -L ttyS0 115200 vt100
+
+# Restart the init process
+::restart:/sbin/init
+
+# Reboot the system
+::ctrlaltdel:/sbin/reboot
+
+# Shutdown the system
+::shutdown:/etc/init.d/rcK
+::shutdown:/sbin/swapoff -a
+::shutdown:/bin/umount -a -r
