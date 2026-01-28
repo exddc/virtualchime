@@ -1,0 +1,14 @@
+config BR2_PACKAGE_CHIME
+	bool "chime"
+	depends on BR2_INSTALL_LIBSTDCPP
+	select BR2_PACKAGE_MOSQUITTO
+	help
+	  Chime doorbell application.
+
+	  This is the main chime notification daemon that receives
+	  doorbell events and plays audio notifications.
+
+	  https://github.com/exddc/virtualchime
+
+comment "chime needs a toolchain w/ C++"
+	depends on !BR2_INSTALL_LIBSTDCPP

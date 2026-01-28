@@ -1,0 +1,14 @@
+Checks: >
+  -*,
+  bugprone-*,
+  modernize-*,
+  performance-*,
+  readability-*,
+  cppcoreguidelines-*,
+  -cppcoreguidelines-owning-memory,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -readability-magic-numbers
+WarningsAsErrors: ''
+HeaderFilterRegex: 'chime/.*'
+AnalyzeTemporaryDtors: false
+FormatStyle: file

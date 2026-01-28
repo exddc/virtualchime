@@ -1,0 +1,71 @@
+name: chime CI
+
+on:
+  push:
+    paths:
+      - "chime/**"
+      - ".github/workflows/chime-ci.yml"
+      - ".clang-format"
+      - ".clang-tidy"
+  pull_request:
+    paths:
+      - "chime/**"
+      - ".github/workflows/chime-ci.yml"
+      - ".clang-format"
+      - ".clang-tidy"
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        build_type: [Release]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build pkg-config \
+            libmosquitto-dev \
+            clang-format clang-tidy
+
+      - name: Configure
+        run: |
+          cmake -S chime -B chime/build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Build
+        run: |
+          cmake --build chime/build --config ${{ matrix.build_type }}
+
+      - name: clang-format (check)
+        run: |
+          files=$(find chime -type f \( -name "*.c" -o -name "*.cc" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \))
+          if [ -z "$files" ]; then
+            echo "No source files found to format."
+            exit 0
+          fi
+          clang-format --version
+          clang-format -n -Werror $files
+
+      - name: clang-tidy
+        run: |
+          clang-tidy --version
+          files=$(find chime -type f \( -name "*.cc" -o -name "*.cpp" \))
+          if [ -z "$files" ]; then
+            echo "No .cc/.cpp files found to analyze."
+            exit 0
+          fi
+          clang-tidy \
+            -p chime/build \
+            $files

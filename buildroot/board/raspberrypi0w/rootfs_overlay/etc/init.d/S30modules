@@ -1,0 +1,53 @@
+#!/bin/sh
+
+MODULES_DIR="/lib/modules/$(uname -r)"
+MARKER_FILE="$MODULES_DIR/.modules_prepared"
+
+decompress_wifi_modules() {
+    for mod in \
+        "$MODULES_DIR/kernel/net/rfkill/rfkill.ko.xz" \
+        "$MODULES_DIR/kernel/net/wireless/cfg80211.ko.xz" \
+        "$MODULES_DIR/kernel/drivers/net/wireless/broadcom/brcm80211/brcmutil/brcmutil.ko.xz" \
+        "$MODULES_DIR/kernel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/brcmfmac.ko.xz" \
+        "$MODULES_DIR/kernel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/wcc/brcmfmac-wcc.ko.xz"
+    do
+        if [ -f "$mod" ]; then
+            xz -d "$mod" 2>/dev/null || true
+        fi
+    done
+}
+
+case "$1" in
+    start)
+        printf "Loading kernel modules: "
+        
+        if [ ! -f "$MARKER_FILE" ]; then
+            decompress_wifi_modules
+            depmod -a
+            touch "$MARKER_FILE"
+        fi
+        
+        # Load WiFi driver
+        modprobe brcmfmac 2>/dev/null
+        
+        # Wait for wlan0
+        for i in 1 2 3 4 5; do
+            [ -d /sys/class/net/wlan0 ] && break
+            sleep 1
+        done
+        
+        if [ -d /sys/class/net/wlan0 ]; then
+            echo "OK"
+        else
+            echo "WARN (wlan0 not found)"
+        fi
+        ;;
+    stop)
+        ;;
+    *)
+        echo "Usage: $0 {start|stop}"
+        exit 1
+        ;;
+esac
+
+exit 0

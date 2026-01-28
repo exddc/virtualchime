@@ -1,0 +1,2 @@
+# Chime external packages
+source "$BR2_EXTERNAL_VIRTUALCHIME_PATH/package/chime/Config.in"

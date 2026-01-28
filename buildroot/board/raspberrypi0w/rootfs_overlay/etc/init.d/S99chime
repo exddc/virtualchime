@@ -1,0 +1,101 @@
+#!/bin/sh
+
+DAEMON="chime"
+DAEMON_PATH="/usr/local/bin/chime"
+PIDFILE="/var/run/chime.pid"
+LOGFILE="/var/log/chime.log"
+
+# Supervisor script that restarts on crash
+SUPERVISOR_PIDFILE="/var/run/chime_supervisor.pid"
+
+start() {
+    printf "Starting %s: " "$DAEMON"
+    
+    # Check if binary exists
+    if [ ! -x "$DAEMON_PATH" ]; then
+        echo "FAIL (binary not found at $DAEMON_PATH)"
+        exit 1
+    fi
+    
+    # Create log directory if needed
+    mkdir -p "$(dirname $LOGFILE)"
+    
+    # Start the supervisor in background
+    (
+        while true; do
+            echo "[$(date)] Starting chime..." >> "$LOGFILE"
+            "$DAEMON_PATH" >> "$LOGFILE" 2>&1
+            EXIT_CODE=$?
+            echo "[$(date)] Chime exited with code $EXIT_CODE, restarting in 2 seconds..." >> "$LOGFILE"
+            sleep 2
+        done
+    ) &
+    
+    SUPERVISOR_PID=$!
+    echo $SUPERVISOR_PID > "$SUPERVISOR_PIDFILE"
+    
+    # Give it a moment to start
+    sleep 1
+    
+    if kill -0 $SUPERVISOR_PID 2>/dev/null; then
+        echo "OK"
+    else
+        echo "FAIL"
+        exit 1
+    fi
+}
+
+stop() {
+    printf "Stopping %s: " "$DAEMON"
+    
+    # Kill supervisor
+    if [ -f "$SUPERVISOR_PIDFILE" ]; then
+        kill $(cat "$SUPERVISOR_PIDFILE") 2>/dev/null || true
+        rm -f "$SUPERVISOR_PIDFILE"
+    fi
+    
+    # Kill any running chime process
+    killall chime 2>/dev/null || true
+    
+    echo "OK"
+}
+
+restart() {
+    stop
+    sleep 1
+    start
+}
+
+status() {
+    if [ -f "$SUPERVISOR_PIDFILE" ] && kill -0 $(cat "$SUPERVISOR_PIDFILE") 2>/dev/null; then
+        echo "$DAEMON supervisor is running (PID $(cat $SUPERVISOR_PIDFILE))"
+        if pgrep -x chime > /dev/null; then
+            echo "$DAEMON process is running"
+        else
+            echo "$DAEMON process is not running (supervisor will restart it)"
+        fi
+    else
+        echo "$DAEMON is not running"
+    fi
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart|reload)
+        restart
+        ;;
+    status)
+        status
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
+
+exit 0

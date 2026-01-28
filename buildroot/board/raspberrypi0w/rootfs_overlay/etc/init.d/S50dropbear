@@ -1,0 +1,63 @@
+#!/bin/sh
+
+DAEMON="dropbear"
+PIDFILE="/var/run/dropbear.pid"
+
+# Dropbear options:
+# -R: Generate host keys on first run if missing
+# -s: Disable password logins
+# -g: Disable password logins for root specifically
+DAEMON_OPTS="-R -s -g"
+
+start() {
+    printf "Starting %s: " "$DAEMON"
+    
+    # Create necessary directories
+    mkdir -p /etc/dropbear
+    
+    # Check for authorized_keys
+    if [ ! -f /root/.ssh/authorized_keys ]; then
+        echo "WARNING: No authorized_keys found!"
+        echo "Copy authorized_keys.example to authorized_keys and add your SSH public key."
+    fi
+    
+    # Start dropbear
+    start-stop-daemon -S -q -p "$PIDFILE" -x /usr/sbin/dropbear -- $DAEMON_OPTS
+    
+    if [ $? -eq 0 ]; then
+        echo "OK"
+    else
+        echo "FAIL"
+        exit 1
+    fi
+}
+
+stop() {
+    printf "Stopping %s: " "$DAEMON"
+    start-stop-daemon -K -q -p "$PIDFILE"
+    echo "OK"
+}
+
+restart() {
+    stop
+    sleep 1
+    start
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart|reload)
+        restart
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+        ;;
+esac
+
+exit 0
