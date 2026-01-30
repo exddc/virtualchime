@@ -1,6 +1,7 @@
 #ifndef CHIME_CONFIG_H
 #define CHIME_CONFIG_H
 
+#include <cctype>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -72,6 +73,25 @@ template <typename T, std::vector<std::string> T::*member>
 bool parse_csv(T& target, std::string_view value) {
   target.*member = split_csv(value);
   return !((target.*member).empty());
+}
+
+// Parse a boolean field (true/false, yes/no, 1/0, on/off)
+template <typename T, bool T::*member>
+bool parse_bool(T& target, std::string_view value) {
+  std::string lower;
+  lower.reserve(value.size());
+  for (char c : value) {
+    lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+  }
+  if (lower == "true" || lower == "yes" || lower == "1" || lower == "on") {
+    target.*member = true;
+    return true;
+  }
+  if (lower == "false" || lower == "no" || lower == "0" || lower == "off") {
+    target.*member = false;
+    return true;
+  }
+  return false;
 }
 
 // Result of loading a config file

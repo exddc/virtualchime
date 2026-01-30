@@ -1,3 +1,5 @@
 kernel=zImage
 enable_uart=1
 dtoverlay=disable-bt
+dtparam=i2s=on
+dtoverlay=max98357a,no-sdmode
