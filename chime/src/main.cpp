@@ -2,9 +2,11 @@
 
 #include <mosquitto.h>
 
+#include <atomic>
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <thread>
@@ -16,26 +18,41 @@ constexpr int kKeepaliveSeconds = 60;
 
 volatile std::sig_atomic_t g_should_stop = 0;
 
-struct MqttConfig {
+// Audio playback state
+std::atomic<bool> g_audio_playing{false};
+
+struct ChimeConfig {
+  // MQTT settings
   std::string host;
   int port = 0;
   std::string client_id = "chime";
   std::vector<std::string> topics;
   int heartbeat_interval = 60;
   std::string heartbeat_topic = "chime/heartbeat";
+
+  // Audio settings
+  std::string ring_topic = "doorbell/ring";
+  std::string sound_path = "/usr/local/share/chime/ring.wav";
+  bool audio_enabled = true;
 };
 
-constexpr config::Field<MqttConfig> kMqttFields[] = {
-    {"mqtt_host", config::parse_string<MqttConfig, &MqttConfig::host>, true},
-    {"mqtt_port", config::parse_int<MqttConfig, &MqttConfig::port>, true},
-    {"mqtt_client_id", config::parse_string<MqttConfig, &MqttConfig::client_id>,
-     false},
-    {"mqtt_topics", config::parse_csv<MqttConfig, &MqttConfig::topics>, true},
+constexpr config::Field<ChimeConfig> kConfigFields[] = {
+    {"mqtt_host", config::parse_string<ChimeConfig, &ChimeConfig::host>, true},
+    {"mqtt_port", config::parse_int<ChimeConfig, &ChimeConfig::port>, true},
+    {"mqtt_client_id",
+     config::parse_string<ChimeConfig, &ChimeConfig::client_id>, false},
+    {"mqtt_topics", config::parse_csv<ChimeConfig, &ChimeConfig::topics>, true},
     {"heartbeat_interval",
-     config::parse_int<MqttConfig, &MqttConfig::heartbeat_interval, 0, 3600>,
+     config::parse_int<ChimeConfig, &ChimeConfig::heartbeat_interval, 0, 3600>,
      false},
     {"heartbeat_topic",
-     config::parse_string<MqttConfig, &MqttConfig::heartbeat_topic>, false},
+     config::parse_string<ChimeConfig, &ChimeConfig::heartbeat_topic>, false},
+    {"ring_topic", config::parse_string<ChimeConfig, &ChimeConfig::ring_topic>,
+     false},
+    {"sound_path", config::parse_string<ChimeConfig, &ChimeConfig::sound_path>,
+     false},
+    {"audio_enabled",
+     config::parse_bool<ChimeConfig, &ChimeConfig::audio_enabled>, false},
 };
 
 std::string get_env(const char* name) {
@@ -46,10 +63,58 @@ std::string get_env(const char* name) {
   return std::string(value);
 }
 
+bool file_exists(const std::string& path) {
+  std::ifstream f(path);
+  return f.good();
+}
+
+bool is_linux() {
+#ifdef __linux__
+  return true;
+#else
+  return false;
+#endif
+}
+
+void play_sound(const std::string& path) {
+  // Skip if already playing
+  bool expected = false;
+  if (!g_audio_playing.compare_exchange_strong(expected, true)) {
+    std::cerr << "[audio] Already playing, skipping\n";
+    return;
+  }
+
+  // In testing environment just log
+  if (!is_linux()) {
+    std::cerr << "[audio] (local) Would play: " << path << "\n";
+    g_audio_playing = false;
+    return;
+  }
+
+  if (!file_exists(path)) {
+    std::cerr << "[audio] Sound file not found: " << path << "\n";
+    g_audio_playing = false;
+    return;
+  }
+
+  // Detached thread to play audio
+  std::thread([path]() {
+    std::cerr << "[audio] Playing: " << path << "\n";
+    const std::string cmd = "aplay -q \"" + path + "\" 2>/dev/null";
+    const int rc = std::system(cmd.c_str());
+    if (rc != 0) {
+      std::cerr << "[audio] aplay failed with code " << rc << "\n";
+    } else {
+      std::cerr << "[audio] Playback complete\n";
+    }
+    g_audio_playing = false;
+  }).detach();
+}
+
 void handle_signal(int) { g_should_stop = 1; }
 
 void on_connect(struct mosquitto* mosq, void* obj, int rc) {
-  auto* config = static_cast<MqttConfig*>(obj);
+  auto* config = static_cast<ChimeConfig*>(obj);
   if (rc != MOSQ_ERR_SUCCESS) {
     std::cerr << "[mqtt] Connect failed: " << mosquitto_strerror(rc) << "\n";
     return;
@@ -71,16 +136,25 @@ void on_disconnect(struct mosquitto*, void*, int rc) {
   std::cerr << "[mqtt] Disconnected: " << rc << "\n";
 }
 
-void on_message(struct mosquitto*, void*,
+void on_message(struct mosquitto*, void* obj,
                 const struct mosquitto_message* msg) {
   if (msg == nullptr || msg->topic == nullptr) {
     return;
   }
+
+  auto* config = static_cast<ChimeConfig*>(obj);
   std::string payload;
   if (msg->payload != nullptr && msg->payloadlen > 0) {
     payload.assign(static_cast<const char*>(msg->payload), msg->payloadlen);
   }
+
   std::cout << "[mqtt] topic=" << msg->topic << " payload=" << payload << "\n";
+
+  // Check if this is a ring message
+  if (config->audio_enabled && msg->topic == config->ring_topic) {
+    std::cerr << "[chime] Ring received!\n";
+    play_sound(config->sound_path);
+  }
 }
 }
 
@@ -92,12 +166,12 @@ int main() {
   const std::string config_path =
       config_env.empty() ? kDefaultConfigPath : config_env;
 
-  auto result = config::load(config_path, MqttConfig{}, kMqttFields);
+  auto result = config::load(config_path, ChimeConfig{}, kConfigFields);
   if (!result) {
-    std::cerr << "[mqtt] " << result.error << "\n";
+    std::cerr << "[chime] " << result.error << "\n";
     return 1;
   }
-  MqttConfig& cfg = result.config;
+  ChimeConfig& cfg = result.config;
 
   mosquitto_lib_init();
 
@@ -126,6 +200,20 @@ int main() {
   std::cerr << "[mqtt] Listening on " << cfg.host << ":" << cfg.port << "\n";
   if (cfg.heartbeat_interval > 0) {
     std::cerr << "[mqtt] Heartbeat every " << cfg.heartbeat_interval << "s\n";
+  }
+
+  // Log audio configuration
+  if (cfg.audio_enabled) {
+    std::cerr << "[audio] Ring topic: " << cfg.ring_topic << "\n";
+    std::cerr << "[audio] Sound file: " << cfg.sound_path;
+    if (!is_linux()) {
+      std::cerr << " (log-only mode on non-Linux)";
+    } else if (!file_exists(cfg.sound_path)) {
+      std::cerr << " (WARNING: file not found)";
+    }
+    std::cerr << "\n";
+  } else {
+    std::cerr << "[audio] Disabled\n";
   }
 
   auto last_heartbeat = std::chrono::steady_clock::now();
