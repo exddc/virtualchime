@@ -41,7 +41,7 @@ case "$1" in
         modprobe regmap-mmio 2>/dev/null
         modprobe snd-soc-bcm2835-i2s 2>/dev/null
         modprobe snd-soc-max98357a 2>/dev/null
-        modprobe snd-soc-rpi-simple-soundcard 2>/dev/null
+        modprobe snd-soc-simple-card 2>/dev/null
         
         # Wait for wlan0
         for i in 1 2 3 4 5; do
