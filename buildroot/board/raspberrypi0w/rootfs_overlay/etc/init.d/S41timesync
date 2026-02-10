@@ -1,0 +1,248 @@
+#!/bin/sh
+
+DAEMON="timesync"
+CONFIG_FILE="/etc/chime.conf"
+PIDFILE="/var/run/chime_timesync.pid"
+LOGFILE="/var/log/chime.log"
+
+NTP_SERVERS_DEFAULT="time.cloudflare.com,time.google.com,pool.ntp.org"
+TIME_HTTP_URLS_DEFAULT="http://connectivitycheck.gstatic.com/generate_204,http://detectportal.firefox.com/success.txt,http://example.com/"
+TIME_SYNC_RETRIES_DEFAULT=6
+TIME_SYNC_RETRY_DELAY_DEFAULT=5
+TIME_SYNC_INTERVAL_DEFAULT=3600
+
+get_config_value() {
+    KEY="$1"
+    DEFAULT_VALUE="$2"
+    if [ -f "$CONFIG_FILE" ]; then
+        VALUE=$(grep -E "^${KEY}=" "$CONFIG_FILE" 2>/dev/null | tail -n 1 | cut -d= -f2-)
+        if [ -n "$VALUE" ]; then
+            echo "$VALUE"
+            return
+        fi
+    fi
+    echo "$DEFAULT_VALUE"
+}
+
+is_positive_integer() {
+    case "$1" in
+        ''|*[!0-9]*) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+load_settings() {
+    NTP_SERVERS_RAW=$(get_config_value "ntp_servers" "$NTP_SERVERS_DEFAULT")
+    TIME_HTTP_URLS_RAW=$(get_config_value "time_http_urls" "$TIME_HTTP_URLS_DEFAULT")
+    TIME_SYNC_RETRIES=$(get_config_value "time_sync_retries" "$TIME_SYNC_RETRIES_DEFAULT")
+    TIME_SYNC_RETRY_DELAY=$(get_config_value "time_sync_retry_delay" "$TIME_SYNC_RETRY_DELAY_DEFAULT")
+    TIME_SYNC_INTERVAL=$(get_config_value "time_sync_interval" "$TIME_SYNC_INTERVAL_DEFAULT")
+
+    if ! is_positive_integer "$TIME_SYNC_RETRIES" || [ "$TIME_SYNC_RETRIES" -lt 1 ]; then
+        TIME_SYNC_RETRIES="$TIME_SYNC_RETRIES_DEFAULT"
+    fi
+    if ! is_positive_integer "$TIME_SYNC_RETRY_DELAY" || [ "$TIME_SYNC_RETRY_DELAY" -lt 1 ]; then
+        TIME_SYNC_RETRY_DELAY="$TIME_SYNC_RETRY_DELAY_DEFAULT"
+    fi
+    if ! is_positive_integer "$TIME_SYNC_INTERVAL"; then
+        TIME_SYNC_INTERVAL="$TIME_SYNC_INTERVAL_DEFAULT"
+    fi
+
+    NTP_SERVERS=$(echo "$NTP_SERVERS_RAW" | tr ',' ' ')
+    TIME_HTTP_URLS=$(echo "$TIME_HTTP_URLS_RAW" | tr ',' ' ')
+}
+
+log_line() {
+    mkdir -p "$(dirname "$LOGFILE")"
+    echo "[$(date)] $*" >> "$LOGFILE"
+}
+
+has_ntpd() {
+    if command -v ntpd >/dev/null 2>&1; then
+        return 0
+    fi
+    if command -v busybox >/dev/null 2>&1 && busybox ntpd --help >/dev/null 2>&1; then
+        return 0
+    fi
+    return 1
+}
+
+has_rdate() {
+    command -v rdate >/dev/null 2>&1
+}
+
+has_wget() {
+    command -v wget >/dev/null 2>&1
+}
+
+extract_http_date() {
+    URL="$1"
+    wget -S -O /dev/null "$URL" 2>&1 \
+        | tr -d '\r' \
+        | awk 'BEGIN{IGNORECASE=1} /^ *Date: /{sub(/^ *Date: /, ""); print; exit}'
+}
+
+set_date_value() {
+    VALUE="$1"
+    date -u -s "$VALUE" >/dev/null 2>&1 && return 0
+    date -u -D "%a, %d %b %Y %H:%M:%S %Z" -s "$VALUE" >/dev/null 2>&1 && return 0
+    return 1
+}
+
+sync_with_server() {
+    SERVER="$1"
+
+    if command -v ntpd >/dev/null 2>&1; then
+        ntpd -n -q -p "$SERVER" >/dev/null 2>&1 && return 0
+        ntpd -gq -p "$SERVER" >/dev/null 2>&1 && return 0
+        ntpd -qg -p "$SERVER" >/dev/null 2>&1 && return 0
+    fi
+    if command -v busybox >/dev/null 2>&1; then
+        busybox ntpd -n -q -p "$SERVER" >/dev/null 2>&1 && return 0
+    fi
+
+    return 1
+}
+
+sync_with_rdate_server() {
+    SERVER="$1"
+    if ! has_rdate; then
+        return 1
+    fi
+    rdate -s "$SERVER" >/dev/null 2>&1
+}
+
+sync_with_http_url() {
+    URL="$1"
+    if ! has_wget; then
+        return 1
+    fi
+    HTTP_DATE=$(extract_http_date "$URL")
+    if [ -z "$HTTP_DATE" ]; then
+        return 1
+    fi
+    set_date_value "$HTTP_DATE"
+}
+
+sync_clock_once() {
+    for SERVER in $NTP_SERVERS; do
+        if sync_with_server "$SERVER"; then
+            log_line "[timesync] Clock synchronized via ${SERVER}"
+            return 0
+        fi
+        if sync_with_rdate_server "$SERVER"; then
+            log_line "[timesync] Clock synchronized via rdate ${SERVER}"
+            return 0
+        fi
+    done
+
+    for URL in $TIME_HTTP_URLS; do
+        if sync_with_http_url "$URL"; then
+            log_line "[timesync] Clock synchronized via HTTP Date ${URL}"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+sync_clock_with_retries() {
+    ATTEMPT=1
+    while [ "$ATTEMPT" -le "$TIME_SYNC_RETRIES" ]; do
+        if sync_clock_once; then
+            return 0
+        fi
+        ATTEMPT=$((ATTEMPT + 1))
+        if [ "$ATTEMPT" -le "$TIME_SYNC_RETRIES" ]; then
+            sleep "$TIME_SYNC_RETRY_DELAY"
+        fi
+    done
+    return 1
+}
+
+start_background_sync() {
+    if [ "$TIME_SYNC_INTERVAL" -eq 0 ]; then
+        log_line "[timesync] Periodic sync disabled (time_sync_interval=0)"
+        return
+    fi
+
+    (
+        while true; do
+            sleep "$TIME_SYNC_INTERVAL"
+            if ! sync_clock_once; then
+                log_line "[timesync] Periodic sync failed"
+            fi
+        done
+    ) &
+    echo $! > "$PIDFILE"
+}
+
+start() {
+    printf "Starting %s: " "$DAEMON"
+
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "OK (already running)"
+        return
+    fi
+
+    load_settings
+
+    if ! has_ntpd; then
+        log_line "[timesync] ntpd not available, using fallback sync methods if possible"
+    fi
+
+    if sync_clock_with_retries; then
+        echo "OK"
+    else
+        echo "WARN (sync failed)"
+        log_line "[timesync] WARNING: startup sync failed after ${TIME_SYNC_RETRIES} attempts (checked ntpd/rdate/http)"
+    fi
+
+    start_background_sync
+}
+
+stop() {
+    printf "Stopping %s: " "$DAEMON"
+
+    if [ -f "$PIDFILE" ]; then
+        kill "$(cat "$PIDFILE")" 2>/dev/null || true
+        rm -f "$PIDFILE"
+    fi
+
+    echo "OK"
+}
+
+restart() {
+    stop
+    sleep 1
+    start
+}
+
+status() {
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "$DAEMON is running (PID $(cat "$PIDFILE"))"
+    else
+        echo "$DAEMON is not running"
+    fi
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart|reload)
+        restart
+        ;;
+    status)
+        status
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
+
+exit 0

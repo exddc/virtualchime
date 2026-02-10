@@ -4,12 +4,108 @@ DAEMON="chime"
 DAEMON_PATH="/usr/local/bin/chime"
 PIDFILE="/var/run/chime.pid"
 LOGFILE="/var/log/chime.log"
+CONFIG_FILE="/etc/chime.conf"
 
 # Supervisor script that restarts on crash
 SUPERVISOR_PIDFILE="/var/run/chime_supervisor.pid"
+RESTART_DELAY_SECONDS=2
+
+# Log rotation defaults (overridable in /etc/chime.conf)
+LOG_MAX_BYTES_DEFAULT=262144
+LOG_ROTATE_KEEP_DEFAULT=5
+LOG_ROTATE_CHECK_INTERVAL_DEFAULT=30
+
+get_config_value() {
+    KEY="$1"
+    DEFAULT_VALUE="$2"
+    if [ -f "$CONFIG_FILE" ]; then
+        VALUE=$(grep -E "^${KEY}=" "$CONFIG_FILE" 2>/dev/null | tail -n 1 | cut -d= -f2-)
+        if [ -n "$VALUE" ]; then
+            echo "$VALUE"
+            return
+        fi
+    fi
+    echo "$DEFAULT_VALUE"
+}
+
+is_positive_integer() {
+    case "$1" in
+        ''|*[!0-9]*) return 1 ;;
+        *) return 0 ;;
+    esac
+}
+
+load_log_settings() {
+    LOG_MAX_BYTES=$(get_config_value "log_max_bytes" "$LOG_MAX_BYTES_DEFAULT")
+    LOG_ROTATE_KEEP=$(get_config_value "log_rotate_keep" "$LOG_ROTATE_KEEP_DEFAULT")
+    LOG_ROTATE_CHECK_INTERVAL=$(get_config_value "log_rotate_check_interval" "$LOG_ROTATE_CHECK_INTERVAL_DEFAULT")
+
+    if ! is_positive_integer "$LOG_MAX_BYTES" || [ "$LOG_MAX_BYTES" -lt 1024 ]; then
+        LOG_MAX_BYTES="$LOG_MAX_BYTES_DEFAULT"
+    fi
+    if ! is_positive_integer "$LOG_ROTATE_KEEP" || [ "$LOG_ROTATE_KEEP" -lt 1 ]; then
+        LOG_ROTATE_KEEP="$LOG_ROTATE_KEEP_DEFAULT"
+    fi
+    if ! is_positive_integer "$LOG_ROTATE_CHECK_INTERVAL" || [ "$LOG_ROTATE_CHECK_INTERVAL" -lt 1 ]; then
+        LOG_ROTATE_CHECK_INTERVAL="$LOG_ROTATE_CHECK_INTERVAL_DEFAULT"
+    fi
+}
+
+log_line() {
+    echo "[$(date)] $*" >> "$LOGFILE"
+}
+
+rotate_logs_if_needed() {
+    if [ ! -f "$LOGFILE" ]; then
+        return
+    fi
+
+    LOG_SIZE=$(wc -c < "$LOGFILE" 2>/dev/null)
+    if [ -z "$LOG_SIZE" ] || [ "$LOG_SIZE" -lt "$LOG_MAX_BYTES" ]; then
+        return
+    fi
+
+    INDEX="$LOG_ROTATE_KEEP"
+    while [ "$INDEX" -gt 1 ]; do
+        PREV=$((INDEX - 1))
+        if [ -f "$LOGFILE.$PREV" ]; then
+            mv "$LOGFILE.$PREV" "$LOGFILE.$INDEX" 2>/dev/null || true
+        fi
+        INDEX=$PREV
+    done
+
+    cp "$LOGFILE" "$LOGFILE.1" 2>/dev/null || true
+    : > "$LOGFILE"
+    log_line "Rotated log file (size=${LOG_SIZE}B max_bytes=${LOG_MAX_BYTES} keep=${LOG_ROTATE_KEEP})"
+}
+
+supervisor_loop() {
+    while true; do
+        rotate_logs_if_needed
+        log_line "Starting chime..."
+
+        "$DAEMON_PATH" >> "$LOGFILE" 2>&1 &
+        CHIME_PID=$!
+
+        while kill -0 "$CHIME_PID" 2>/dev/null; do
+            sleep "$LOG_ROTATE_CHECK_INTERVAL"
+            rotate_logs_if_needed
+        done
+
+        wait "$CHIME_PID"
+        EXIT_CODE=$?
+        log_line "Chime exited with code $EXIT_CODE, restarting in ${RESTART_DELAY_SECONDS} seconds..."
+        sleep "$RESTART_DELAY_SECONDS"
+    done
+}
 
 start() {
     printf "Starting %s: " "$DAEMON"
+
+    if [ -f "$SUPERVISOR_PIDFILE" ] && kill -0 "$(cat "$SUPERVISOR_PIDFILE")" 2>/dev/null; then
+        echo "OK (already running)"
+        return
+    fi
     
     # Check if binary exists
     if [ ! -x "$DAEMON_PATH" ]; then
@@ -18,17 +114,12 @@ start() {
     fi
     
     # Create log directory if needed
-    mkdir -p "$(dirname $LOGFILE)"
+    mkdir -p "$(dirname "$LOGFILE")"
+    load_log_settings
     
     # Start the supervisor in background
     (
-        while true; do
-            echo "[$(date)] Starting chime..." >> "$LOGFILE"
-            "$DAEMON_PATH" >> "$LOGFILE" 2>&1
-            EXIT_CODE=$?
-            echo "[$(date)] Chime exited with code $EXIT_CODE, restarting in 2 seconds..." >> "$LOGFILE"
-            sleep 2
-        done
+        supervisor_loop
     ) &
     
     SUPERVISOR_PID=$!

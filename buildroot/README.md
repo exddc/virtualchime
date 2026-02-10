@@ -50,8 +50,9 @@ docker volume rm virtualchime-buildroot-cache
 |------|---------|
 | `etc/init.d/S30modules` | Decompresses WiFi modules, runs depmod, loads brcmfmac |
 | `etc/init.d/S40network` | Starts wpa_supplicant and DHCP |
+| `etc/init.d/S41timesync` | Syncs system clock from NTP and keeps periodic resync running |
 | `etc/init.d/S50dropbear` | SSH daemon (key-only auth) |
-| `etc/init.d/S99chime` | Chime application with auto-restart |
+| `etc/init.d/S99chime` | Chime application with auto-restart and log rotation |
 | `etc/wpa_supplicant/wpa_supplicant.conf` | WiFi credentials (gitignored) |
 | `etc/inittab` | Getty on ttyS0 for serial console |
 | `root/.ssh/authorized_keys` | SSH public keys (gitignored) |
@@ -143,11 +144,43 @@ arp -a | grep b8:27:eb
 ssh root@<ip>
 ```
 
+### Chime reliability logs
+```bash
+# Follow daemon logs
+tail -f /var/log/chime.log
+
+# Or from host
+./scripts/logs_pi.sh <pi-ip> f
+
+# Rotated files
+ls -lh /var/log/chime.log*
+```
+
+Log stream includes service start/stop, MQTT connect/disconnect/reconnect,
+message receipt details, heartbeat publish status, WiFi link-state transitions,
+and periodic health counters.
+
+### Incorrect clock / 1970 timestamps
+```bash
+# Check current UTC time
+date -u
+
+# Check time sync service
+/etc/init.d/S41timesync status
+```
+
+If `date` is still near 1970:
+- Verify internet reachability.
+- Check whether `ntpd` exists on the running image (`command -v ntpd`).
+- Verify `/etc/chime.conf` time sync keys (`ntp_servers`, `time_http_urls`, `time_sync_retries`, `time_sync_interval`).
+- On an already-flashed image without `ntpd`, the fallback methods (`rdate`/HTTP Date via `wget`) are used when available.
+
 ## Packages Included
 
 - kmod (modprobe, depmod)
 - wpa_supplicant (WiFi)
 - dropbear (SSH)
 - dhcpcd, udhcpc (DHCP)
+- ntp/ntpd (clock synchronization)
 - iw (WiFi debug)
 - brcmfmac firmware (Pi Zero W WiFi)
