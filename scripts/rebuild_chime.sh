@@ -36,8 +36,10 @@ cd /home/builder/work/buildroot-'"$BUILDROOT_VERSION"'
 
 # Update chime source from the mounted project
 echo "[rebuild] Syncing chime source..."
-rm -rf /home/builder/chime
-cp -r /home/builder/virtualchime/chime /home/builder/chime
+rm -rf /home/builder/chime-src
+mkdir -p /home/builder/chime-src
+cp -r /home/builder/virtualchime/chime /home/builder/chime-src/chime
+cp -r /home/builder/virtualchime/common /home/builder/chime-src/common
 
 # Update br2-external tree
 echo "[rebuild] Syncing br2-external..."

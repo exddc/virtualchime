@@ -60,8 +60,11 @@ mkdir -p /home/builder/br2-external
 # Copy the buildroot external tree
 cp -r /home/builder/virtualchime/buildroot/* /home/builder/br2-external/
 
-# Copy the chime source so the package can find it at ../chime
-cp -r /home/builder/virtualchime/chime /home/builder/chime
+# Copy the chime source tree (app + shared modules)
+rm -rf /home/builder/chime-src
+mkdir -p /home/builder/chime-src
+cp -r /home/builder/virtualchime/chime /home/builder/chime-src/chime
+cp -r /home/builder/virtualchime/common /home/builder/chime-src/common
 
 cd "buildroot-$BUILDROOT_VERSION"
 

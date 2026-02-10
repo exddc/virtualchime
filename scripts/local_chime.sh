@@ -6,7 +6,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 CHIME_DIR="$PROJECT_DIR/chime"
 BUILD_DIR="$CHIME_DIR/build-local"
-SRC="$CHIME_DIR/src/main.cpp"
 BIN="$BUILD_DIR/chime"
 DEFAULT_CONFIG="$PROJECT_DIR/buildroot/board/raspberrypi0w/rootfs_overlay/etc/chime.conf"
 
@@ -55,14 +54,24 @@ build() {
     read -r -a MOSQ_LIBS <<< "$libs"
 
     mkdir -p "$BUILD_DIR"
+    SOURCES=()
+    while IFS= read -r source; do
+        SOURCES+=("$source")
+    done < <(find "$CHIME_DIR/src" "$PROJECT_DIR/common/src" -type f -name '*.cpp' | sort)
+    if [ "${#SOURCES[@]}" -eq 0 ]; then
+        error "No source files found."
+    fi
+
     log "Compiling..."
     "${CXX:-c++}" \
         -std=c++20 \
         -Wall -Wextra -Wpedantic \
         -O2 \
         ${CXXFLAGS:-} \
+        -I"$CHIME_DIR/include" \
+        -I"$PROJECT_DIR/common/include" \
         "${MOSQ_CFLAGS[@]}" \
-        "$SRC" \
+        "${SOURCES[@]}" \
         -o "$BIN" \
         ${LDFLAGS:-} \
         "${MOSQ_LIBS[@]}"
@@ -80,8 +89,10 @@ run() {
         error "Config not found: $config_path"
     fi
 
+    local client_id="${CHIME_MQTT_CLIENT_ID:-chime-local-$(hostname -s)}"
     log "Running with config: $config_path"
-    CHIME_CONFIG="$config_path" "$BIN"
+    log "Using MQTT client id: $client_id"
+    CHIME_CONFIG="$config_path" CHIME_MQTT_CLIENT_ID="$client_id" "$BIN"
 }
 
 usage() {
@@ -90,11 +101,14 @@ Usage: $0 [build|run] [config_path]
 
 build: Build the local chime binary
 run:   Build if needed and run with config (default: $DEFAULT_CONFIG)
+       Uses CHIME_MQTT_CLIENT_ID if set, otherwise defaults to
+       chime-local-\$(hostname -s)
 
 Examples:
   $0 build
   $0 run
   $0 run /path/to/chime.conf
+  CHIME_MQTT_CLIENT_ID=chime-local-dev $0 run
 EOF
 }
 
