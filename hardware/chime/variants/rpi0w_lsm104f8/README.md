@@ -24,11 +24,11 @@ This variant is built for the Raspberry Pi Zero W and uses the LSM-104F-8 speake
 
 ## Wiring
 
-Raspberry Pi Zero W           MAX98357A
----------------------------------------
-Pin 4 (5V)  -------------------> VIN
-Pin 6 (GND)  ------------------> GND
-Pin 12 (GPIO18) ---------------> BCLK
-Pin 35 (GPIO19) ---------------> LRC
-Pin 40 (GPIO21) ---------------> DIN
-5V ----------------------------> SD
+| Raspberry Pi Zero W | MAX98357A |
+|--------------------|-----------|
+| Pin 4 (5V)         | VIN       |
+| Pin 6 (GND)        | GND       |
+| Pin 12 (GPIO18)    | BCLK      |
+| Pin 35 (GPIO19)    | LRC       |
+| Pin 40 (GPIO21)    | DIN       |
+| 5V                 | SD        |
