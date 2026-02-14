@@ -24,8 +24,8 @@ echo ""
 echo "  # Rebuild chime package after editing chime/src/main.cpp:"
 echo "  make BR2_EXTERNAL=/home/builder/br2-external chime-rebuild"
 echo ""
-echo "  # Binary will be at: output/build/chime-1.0/chime"
-echo "  # Copy it out: cp output/build/chime-1.0/chime /home/builder/output/"
+echo "  # Binary will be at: output/build/chime-*/chime/chime"
+echo "  # Copy it out: cp \$(find output/build -maxdepth 1 -type d -name 'chime-*' | sort | tail -n1)/chime/chime /home/builder/output/chime"
 echo ""
 
 docker run --rm -it \

@@ -18,6 +18,49 @@ cat ~/.ssh/id_ed25519.pub > board/raspberrypi0w/rootfs_overlay/root/.ssh/authori
 
 # 4. Flash - this takes 1-2 minutes
 ./scripts/flash_sd.sh /dev/diskN
+
+# 5. Check versions on a Pi
+./scripts/version_pi.sh <pi-ip>
+```
+
+## Versioning
+
+Version sources:
+
+```bash
+buildroot/version.env
+chime/VERSION
+```
+
+`buildroot/version.env`
+```bash
+VIRTUALCHIME_OS_VERSION=0.1.0
+CHIME_CONFIG_VERSION=1
+```
+
+`chime/VERSION`
+```bash
+1.0.0
+```
+
+- `VIRTUALCHIME_OS_VERSION`: bump when you build/flash a new OS image.
+- `CHIME_CONFIG_VERSION`: bump when default `chime.conf` semantics or format changes.
+- `chime/VERSION`: bump when `chime` binary behavior changes.
+
+During image builds, `post_build.sh` writes `/etc/virtualchime-release` on the target rootfs.
+Read versions on-device with:
+
+```bash
+cat /etc/virtualchime-release
+cat /etc/chime-app-version
+uname -r
+/usr/local/bin/chime --version
+```
+
+To enforce version bumps in CI (or before merge):
+
+```bash
+./scripts/check_version_bump.sh origin/main HEAD
 ```
 
 ## Build System
@@ -31,6 +74,40 @@ docker volume rm virtualchime-buildroot-cache
 
 # Interactive shell for debugging
 ./scripts/docker_shell.sh
+```
+
+### Docker resource settings (recommended)
+
+If your Mac is mostly idle during builds, Docker is likely CPU/RAM-limited.
+In Docker Desktop, set:
+
+- CPUs: `6-8`
+- Memory: `8-12 GiB`
+- Swap: `2-4 GiB`
+
+### Fast iteration workflow
+
+Use the full image build only when OS-level components changed (kernel, rootfs overlay,
+Buildroot packages, boot files, image layout):
+
+```bash
+./scripts/docker_build.sh
+```
+
+For app-only changes (`chime/` or `common/`), use:
+
+```bash
+./scripts/rebuild_chime.sh
+```
+
+`docker_build.sh` supports:
+
+```bash
+# Override parallel jobs (defaults to container nproc)
+JOBS=8 ./scripts/docker_build.sh
+
+# Reuse existing builder image without docker build
+SKIP_IMAGE_BUILD=1 ./scripts/docker_build.sh
 ```
 
 ## Key Files
@@ -61,6 +138,8 @@ docker volume rm virtualchime-buildroot-cache
 | File | Purpose |
 |------|---------|
 | `configs/virtualchime_rpi0w_defconfig` | Main Buildroot config |
+| `version.env` | OS/config version source of truth |
+| `../chime/VERSION` | Chime app SemVer source of truth |
 | `package/chime/chime.mk` | Chime package recipe |
 | `board/raspberrypi0w/genimage.cfg` | SD card image layout |
 | `board/raspberrypi0w/post_build.sh` | Creates firmware symlinks, runs depmod |

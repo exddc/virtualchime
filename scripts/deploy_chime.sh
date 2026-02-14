@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 OUTPUT_DIR="$PROJECT_DIR/buildroot/output"
 CHIME_BINARY="$OUTPUT_DIR/chime"
+APP_VERSION_FILE="$PROJECT_DIR/chime/VERSION"
 
 PI_HOST="${1:-}"
 SSH_USER="root"
@@ -30,6 +31,11 @@ fi
 if [ ! -f "$CHIME_BINARY" ]; then
     error "Binary not found at $CHIME_BINARY. Run ./scripts/rebuild_chime.sh first."
 fi
+[ -f "$APP_VERSION_FILE" ] || error "App version file not found at $APP_VERSION_FILE"
+APP_VERSION="$(head -n 1 "$APP_VERSION_FILE" | tr -d '[:space:]')"
+if [ -z "$APP_VERSION" ]; then
+    error "App version is empty in $APP_VERSION_FILE"
+fi
 
 log "Deploying chime to $PI_HOST..."
 
@@ -42,6 +48,7 @@ scp -O $SSH_OPTS "$CHIME_BINARY" "$SSH_USER@$PI_HOST:$REMOTE_PATH"
 
 # Set permissions
 ssh $SSH_OPTS "$SSH_USER@$PI_HOST" "chmod +x $REMOTE_PATH"
+ssh $SSH_OPTS "$SSH_USER@$PI_HOST" "printf '%s\n' '$APP_VERSION' > /etc/chime-app-version"
 
 # Start the service
 log "Starting chime service..."
@@ -52,6 +59,9 @@ sleep 2
 # Show status
 log "Service status:"
 ssh $SSH_OPTS "$SSH_USER@$PI_HOST" "/etc/init.d/S99chime status"
+
+log "Installed version:"
+ssh $SSH_OPTS "$SSH_USER@$PI_HOST" "$REMOTE_PATH --version || true"
 
 log "Deployment complete!"
 log "View logs: ssh $SSH_USER@$PI_HOST tail -f /var/log/chime.log"

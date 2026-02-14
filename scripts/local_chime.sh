@@ -8,6 +8,8 @@ CHIME_DIR="$PROJECT_DIR/chime"
 BUILD_DIR="$CHIME_DIR/build-local"
 BIN="$BUILD_DIR/chime"
 DEFAULT_CONFIG="$PROJECT_DIR/buildroot/board/raspberrypi0w/rootfs_overlay/etc/chime.conf"
+BUILDROOT_VERSION_FILE="$PROJECT_DIR/buildroot/version.env"
+APP_VERSION_FILE="$PROJECT_DIR/chime/VERSION"
 
 log() { echo "[local-chime] $*"; }
 error() { echo "[local-chime] ERROR: $*" >&2; exit 1; }
@@ -42,6 +44,22 @@ get_mosquitto_flags() {
 }
 
 build() {
+    local chime_app_version="dev"
+    local os_version="dev"
+    local config_version="dev"
+    if [ -f "$APP_VERSION_FILE" ]; then
+        chime_app_version="$(head -n 1 "$APP_VERSION_FILE" | tr -d '[:space:]')"
+    fi
+    if [ -z "$chime_app_version" ]; then
+        chime_app_version="dev"
+    fi
+    if [ -f "$BUILDROOT_VERSION_FILE" ]; then
+        # shellcheck disable=SC1090
+        . "$BUILDROOT_VERSION_FILE"
+        os_version="${VIRTUALCHIME_OS_VERSION:-$os_version}"
+        config_version="${CHIME_CONFIG_VERSION:-$config_version}"
+    fi
+
     local flags
     if ! flags="$(get_mosquitto_flags)"; then
         error "libmosquitto not found. Install with:
@@ -68,6 +86,9 @@ build() {
         -Wall -Wextra -Wpedantic \
         -O2 \
         ${CXXFLAGS:-} \
+        "-DCHIME_APP_VERSION=\"$chime_app_version\"" \
+        "-DVIRTUALCHIME_OS_VERSION=\"$os_version\"" \
+        "-DCHIME_CONFIG_VERSION=\"$config_version\"" \
         -I"$CHIME_DIR/include" \
         -I"$PROJECT_DIR/common/include" \
         "${MOSQ_CFLAGS[@]}" \

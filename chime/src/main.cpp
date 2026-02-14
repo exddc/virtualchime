@@ -1,3 +1,4 @@
+#include <fstream>
 #include <iostream>
 #include <string>
 
@@ -11,9 +12,77 @@
 
 namespace {
 constexpr const char* kDefaultConfigPath = "/etc/chime.conf";
+constexpr const char* kReleaseFilePath = "/etc/virtualchime-release";
+
+#ifndef CHIME_APP_VERSION
+#define CHIME_APP_VERSION "dev"
+#endif
+
+#ifndef VIRTUALCHIME_OS_VERSION
+#define VIRTUALCHIME_OS_VERSION "dev"
+#endif
+
+#ifndef CHIME_CONFIG_VERSION
+#define CHIME_CONFIG_VERSION "dev"
+#endif
+
+std::string ReadReleaseValue(const std::string& key) {
+  std::ifstream release_file(kReleaseFilePath);
+  if (!release_file.is_open()) {
+    return "";
+  }
+
+  const std::string prefix = key + "=";
+  std::string line;
+  while (std::getline(release_file, line)) {
+    if (line.rfind(prefix, 0) == 0) {
+      return line.substr(prefix.size());
+    }
+  }
+
+  return "";
 }
 
-int main() {
+void PrintUsage(const char* program) {
+  std::cout << "Usage: " << program << " [--version]\n";
+}
+
+void PrintVersion() {
+  std::cout << "CHIME_APP_VERSION=" << CHIME_APP_VERSION << "\n";
+  std::cout << "VIRTUALCHIME_OS_VERSION=" << VIRTUALCHIME_OS_VERSION << "\n";
+  std::cout << "CHIME_CONFIG_VERSION=" << CHIME_CONFIG_VERSION << "\n";
+
+  const std::string runtime_os_version =
+      ReadReleaseValue("VIRTUALCHIME_OS_VERSION");
+  if (!runtime_os_version.empty()) {
+    std::cout << "RUNTIME_OS_VERSION=" << runtime_os_version << "\n";
+  }
+
+  const std::string runtime_kernel_version =
+      ReadReleaseValue("LINUX_KERNEL_RELEASE");
+  if (!runtime_kernel_version.empty()) {
+    std::cout << "RUNTIME_KERNEL_RELEASE=" << runtime_kernel_version << "\n";
+  }
+}
+}
+
+int main(int argc, char* argv[]) {
+  if (argc > 1) {
+    const std::string arg = argv[1];
+    if (arg == "--version" || arg == "-v") {
+      PrintVersion();
+      return 0;
+    }
+    if (arg == "--help" || arg == "-h") {
+      PrintUsage(argv[0]);
+      return 0;
+    }
+
+    std::cerr << "Unknown option: " << arg << "\n";
+    PrintUsage(argv[0]);
+    return 2;
+  }
+
   std::cout.setf(std::ios::unitbuf);
   std::cerr.setf(std::ios::unitbuf);
 
