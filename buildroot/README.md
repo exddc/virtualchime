@@ -20,7 +20,7 @@ cat ~/.ssh/id_ed25519.pub > board/raspberrypi0w/rootfs_overlay/root/.ssh/authori
 ./scripts/flash_sd.sh /dev/diskN
 
 # 5. Check versions on a Pi
-./scripts/version_pi.sh <pi-ip>
+./scripts/deploy.sh version <pi-ip>
 ```
 
 ## Versioning
@@ -69,11 +69,7 @@ Uses Docker to avoid host dependencies. Build artifacts stored in a Docker volum
 
 ```bash
 # Rebuild from scratch
-docker volume rm virtualchime-buildroot-cache
-./scripts/docker_build.sh
-
-# Interactive shell for debugging
-./scripts/docker_shell.sh
+./scripts/docker_build.sh --clear-docker-cache
 ```
 
 ### Docker resource settings (recommended)
@@ -97,7 +93,13 @@ Buildroot packages, boot files, image layout):
 For app-only changes (`chime/` or `common/`), use:
 
 ```bash
-./scripts/rebuild_chime.sh
+./scripts/deploy.sh chime <pi-ip>
+```
+
+Deploy configuration-only changes with:
+
+```bash
+./scripts/deploy.sh config <pi-ip>
 ```
 
 `docker_build.sh` supports:
@@ -108,6 +110,9 @@ JOBS=8 ./scripts/docker_build.sh
 
 # Reuse existing builder image without docker build
 SKIP_IMAGE_BUILD=1 ./scripts/docker_build.sh
+
+# Clear Docker build cache volume first, then build
+./scripts/docker_build.sh --clear-docker-cache
 ```
 
 ## Key Files
@@ -229,7 +234,7 @@ ssh root@<ip>
 tail -f /var/log/chime.log
 
 # Or from host
-./scripts/logs_pi.sh <pi-ip> f
+ssh root@<pi-ip> 'tail -f /var/log/chime.log'
 
 # Rotated files
 ls -lh /var/log/chime.log*

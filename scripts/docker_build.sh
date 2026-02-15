@@ -4,9 +4,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-BUILDROOT_VERSION="${1:-2024.02.1}"
+DEFAULT_BUILDROOT_VERSION="2024.02.1"
+BUILDROOT_VERSION="$DEFAULT_BUILDROOT_VERSION"
+BUILDROOT_VERSION_SET=0
 JOBS="${JOBS:-}"
 SKIP_IMAGE_BUILD="${SKIP_IMAGE_BUILD:-0}"
+CLEAR_DOCKER_CACHE=0
 
 IMAGE_NAME="virtualchime-builder"
 VOLUME_NAME="virtualchime-buildroot-cache"
@@ -19,6 +22,46 @@ error() { echo "[docker-build] ERROR: $*" >&2; exit 1; }
 now() { date +%s; }
 elapsed() { local start="$1" end; end="$(now)"; echo $((end - start)); }
 log_timing() { local step="$1"; local secs="$2"; log "timing[$step]: ${secs}s"; }
+
+usage() {
+    cat <<EOF
+Usage: $0 [buildroot-version] [--clear-docker-cache]
+
+Options:
+  --clear-docker-cache  Remove Docker volume '$VOLUME_NAME' before building
+  -h, --help            Show this help text
+
+Environment:
+  JOBS=<n>              Override parallel make jobs inside the container
+  SKIP_IMAGE_BUILD=1    Reuse existing '$IMAGE_NAME' image without rebuilding it
+EOF
+}
+
+parse_args() {
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --clear-docker-cache)
+                CLEAR_DOCKER_CACHE=1
+                shift
+                ;;
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            --*)
+                error "Unknown option: $1"
+                ;;
+            *)
+                if [ "$BUILDROOT_VERSION_SET" -eq 1 ]; then
+                    error "Unexpected argument: $1"
+                fi
+                BUILDROOT_VERSION="$1"
+                BUILDROOT_VERSION_SET=1
+                shift
+                ;;
+        esac
+    done
+}
 
 check_secrets() {
     local wifi_conf="$PROJECT_DIR/buildroot/board/raspberrypi0w/rootfs_overlay/etc/wpa_supplicant/wpa_supplicant.conf"
@@ -51,6 +94,19 @@ build_or_reuse_docker_image() {
     log "Building Docker image..."
     docker build -t "$IMAGE_NAME" "$PROJECT_DIR/buildroot"
     log_timing "docker image" "$(elapsed "$start")"
+}
+
+clear_docker_cache_if_requested() {
+    if [ "$CLEAR_DOCKER_CACHE" != "1" ]; then
+        return
+    fi
+
+    log "Clearing Docker cache volume '$VOLUME_NAME'..."
+    if docker volume rm "$VOLUME_NAME" >/dev/null 2>&1; then
+        log "Removed cache volume '$VOLUME_NAME'"
+    else
+        log "Cache volume '$VOLUME_NAME' not found or could not be removed; continuing"
+    fi
 }
 
 print_container_resources() {
@@ -166,11 +222,13 @@ fi
     log_timing "export" "$(elapsed "$export_start")"
 }
 
+parse_args "$@"
 log "Virtual Chime Buildroot Docker Build"
 validate_inputs
 check_secrets
 check_versions
 build_or_reuse_docker_image
+clear_docker_cache_if_requested
 print_container_resources
 run_build
 
