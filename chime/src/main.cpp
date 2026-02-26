@@ -26,6 +26,10 @@ constexpr const char* kReleaseFilePath = "/etc/virtualchime-release";
 #define CHIME_CONFIG_VERSION "dev"
 #endif
 
+#ifndef CHIME_BUILD_ID
+#define CHIME_BUILD_ID "unknown"
+#endif
+
 std::string ReadReleaseValue(const std::string& key) {
   std::ifstream release_file(kReleaseFilePath);
   if (!release_file.is_open()) {
@@ -49,6 +53,7 @@ void PrintUsage(const char* program) {
 
 void PrintVersion() {
   std::cout << "CHIME_APP_VERSION=" << CHIME_APP_VERSION << "\n";
+  std::cout << "CHIME_BUILD_ID=" << CHIME_BUILD_ID << "\n";
   std::cout << "VIRTUALCHIME_OS_VERSION=" << VIRTUALCHIME_OS_VERSION << "\n";
   std::cout << "CHIME_CONFIG_VERSION=" << CHIME_CONFIG_VERSION << "\n";
 
@@ -62,6 +67,16 @@ void PrintVersion() {
       ReadReleaseValue("LINUX_KERNEL_RELEASE");
   if (!runtime_kernel_version.empty()) {
     std::cout << "RUNTIME_KERNEL_RELEASE=" << runtime_kernel_version << "\n";
+  }
+
+  const std::string runtime_app_build_id = ReadReleaseValue("CHIME_BUILD_ID");
+  if (!runtime_app_build_id.empty()) {
+    std::cout << "RUNTIME_CHIME_BUILD_ID=" << runtime_app_build_id << "\n";
+  }
+
+  const std::string runtime_source_sha = ReadReleaseValue("SOURCE_GIT_SHA");
+  if (!runtime_source_sha.empty()) {
+    std::cout << "RUNTIME_SOURCE_GIT_SHA=" << runtime_source_sha << "\n";
   }
 }
 }

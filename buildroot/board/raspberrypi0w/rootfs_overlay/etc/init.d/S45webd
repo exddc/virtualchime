@@ -1,0 +1,118 @@
+#!/bin/sh
+
+DAEMON="chime-webd"
+DAEMON_PATH="/usr/local/bin/chime-webd"
+LOGFILE="/var/log/chime-web.log"
+SUPERVISOR_PIDFILE="/var/run/chime-webd_supervisor.pid"
+RESTART_DELAY_SECONDS=2
+
+log_line() {
+    echo "[$(date)] $*" >> "$LOGFILE"
+}
+
+supervisor_loop() {
+    while true; do
+        log_line "Starting $DAEMON..."
+        "$DAEMON_PATH" >> "$LOGFILE" 2>&1 &
+        CHILD_PID=$!
+
+        wait "$CHILD_PID"
+        EXIT_CODE=$?
+
+        log_line "$DAEMON exited with code $EXIT_CODE, restarting in ${RESTART_DELAY_SECONDS}s"
+        sleep "$RESTART_DELAY_SECONDS"
+    done
+}
+
+start() {
+    printf "Starting %s: " "$DAEMON"
+
+    if [ -f "$SUPERVISOR_PIDFILE" ] && kill -0 "$(cat "$SUPERVISOR_PIDFILE")" 2>/dev/null; then
+        echo "OK (already running)"
+        return
+    fi
+
+    if [ ! -x "$DAEMON_PATH" ]; then
+        echo "FAIL (binary not found at $DAEMON_PATH)"
+        exit 1
+    fi
+
+    mkdir -p "$(dirname "$LOGFILE")"
+
+    (
+        supervisor_loop
+    ) &
+
+    SUPERVISOR_PID=$!
+    echo "$SUPERVISOR_PID" > "$SUPERVISOR_PIDFILE"
+
+    sleep 1
+    if kill -0 "$SUPERVISOR_PID" 2>/dev/null; then
+        echo "OK"
+    else
+        echo "FAIL"
+        exit 1
+    fi
+}
+
+stop() {
+    printf "Stopping %s: " "$DAEMON"
+
+    if [ -f "$SUPERVISOR_PIDFILE" ]; then
+        kill "$(cat "$SUPERVISOR_PIDFILE")" 2>/dev/null || true
+        rm -f "$SUPERVISOR_PIDFILE"
+    fi
+
+    killall chime-webd 2>/dev/null || true
+
+    echo "OK"
+}
+
+restart() {
+    stop
+    sleep 1
+    start
+}
+
+status() {
+    is_webd_running=1
+    if command -v pidof >/dev/null 2>&1; then
+        pidof chime-webd >/dev/null 2>&1 || is_webd_running=0
+    elif command -v killall >/dev/null 2>&1; then
+        killall -0 chime-webd >/dev/null 2>&1 || is_webd_running=0
+    else
+        ps | grep '[c]hime-webd' >/dev/null 2>&1 || is_webd_running=0
+    fi
+
+    if [ -f "$SUPERVISOR_PIDFILE" ] && kill -0 "$(cat "$SUPERVISOR_PIDFILE")" 2>/dev/null; then
+        echo "$DAEMON supervisor is running (PID $(cat "$SUPERVISOR_PIDFILE"))"
+        if [ "$is_webd_running" -eq 1 ]; then
+            echo "$DAEMON process is running"
+        else
+            echo "$DAEMON process is not running (supervisor will restart it)"
+        fi
+    else
+        echo "$DAEMON is not running"
+    fi
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    restart|reload)
+        restart
+        ;;
+    status)
+        status
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
+        ;;
+esac
+
+exit 0

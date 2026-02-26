@@ -26,3 +26,9 @@ buildroot/board/raspberrypi0w/rootfs_overlay/root/.ssh/authorized_keys
 
 # Buildroot build output
 buildroot/output/
+buildroot/build_meta.env
+
+# Local chime dev artifacts
+chime/build-local/bin/
+chime/build-local/runtime/
+chime/build-local/chime-webd

@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(MOSQ REQUIRED libmosquitto)
+find_package(OpenSSL REQUIRED)
+find_package(Threads REQUIRED)
 
 add_library(
   vc_common STATIC
@@ -32,7 +34,30 @@ target_include_directories(chime_core PUBLIC include ../common/include)
 target_compile_options(chime_core PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(chime_core PUBLIC vc_common)
 
+add_library(
+  chime_webd_core STATIC
+  src/webd/apply_manager.cpp
+  src/webd/config_store.cpp
+  src/webd/json.cpp
+  src/webd/mdns.cpp
+  src/webd/ui_assets.cpp
+  src/webd/web_server.cpp
+  src/webd/wifi_scan.cpp)
+target_include_directories(chime_webd_core PUBLIC include ../common/include)
+target_compile_options(chime_webd_core PRIVATE -Wall -Wextra -Wpedantic)
+target_link_libraries(
+  chime_webd_core
+  PUBLIC vc_common OpenSSL::SSL OpenSSL::Crypto Threads::Threads)
+
 add_executable(chime src/main.cpp)
 target_include_directories(chime PRIVATE include ../common/include)
 target_compile_options(chime PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(chime PRIVATE chime_core vc_common)
+
+add_executable(chime-webd src/webd/main.cpp)
+target_include_directories(chime-webd PRIVATE include ../common/include)
+target_compile_options(chime-webd PRIVATE -Wall -Wextra -Wpedantic)
+target_link_libraries(
+  chime-webd
+  PRIVATE chime_webd_core vc_common OpenSSL::SSL OpenSSL::Crypto
+          Threads::Threads)

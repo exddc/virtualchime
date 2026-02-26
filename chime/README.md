@@ -1,6 +1,7 @@
 # Chime Service
 
 `chime` is a minimal MQTT-to-audio daemon for the Raspberry Pi Zero W.
+`chime-webd` is a lightweight HTTPS control-plane daemon for web configuration APIs/UI.
 
 Operational runbook: `RELIABILITY_RUNBOOK.md`.
 
@@ -11,6 +12,20 @@ Operational runbook: `RELIABILITY_RUNBOOK.md`.
 3. When a message arrives on `ring_topic`, plays `sound_path` using `aplay`.
 4. Publishes `heartbeat_topic` every `heartbeat_interval` seconds.
 5. Automatically reconnects to MQTT after disconnect or loop errors.
+
+## Web Platform (`chime-webd`)
+
+- Serves HTTPS UI/API on port `8443`.
+- Hosts current v1 endpoints:
+  - `GET /`
+  - `GET /api/v1/config/core`
+  - `POST /api/v1/config/core`
+  - `GET /api/v1/wifi/scan`
+- Reserves `/api/v1/system/*`, `/api/v1/device/*`, and `/api/v1/diagnostics/*` for future API expansion (`501` responses in v1).
+- Uses self-signed TLS cert/key at:
+  - `/etc/chime-web/tls/cert.pem`
+  - `/etc/chime-web/tls/key.pem`
+- Runs as a separate process from `chime` for ring-path reliability isolation.
 
 ## Reliability Logging
 

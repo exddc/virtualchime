@@ -158,9 +158,18 @@ restart() {
 }
 
 status() {
+    is_chime_running=1
+    if command -v pidof >/dev/null 2>&1; then
+        pidof chime >/dev/null 2>&1 || is_chime_running=0
+    elif command -v killall >/dev/null 2>&1; then
+        killall -0 chime >/dev/null 2>&1 || is_chime_running=0
+    else
+        ps | grep '[c]hime' >/dev/null 2>&1 || is_chime_running=0
+    fi
+
     if [ -f "$SUPERVISOR_PIDFILE" ] && kill -0 $(cat "$SUPERVISOR_PIDFILE") 2>/dev/null; then
         echo "$DAEMON supervisor is running (PID $(cat $SUPERVISOR_PIDFILE))"
-        if pgrep -x chime > /dev/null; then
+        if [ "$is_chime_running" -eq 1 ]; then
             echo "$DAEMON process is running"
         else
             echo "$DAEMON process is not running (supervisor will restart it)"

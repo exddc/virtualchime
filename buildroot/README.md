@@ -132,10 +132,12 @@ SKIP_IMAGE_BUILD=1 ./scripts/docker_build.sh
 |------|---------|
 | `etc/init.d/S30modules` | Decompresses WiFi modules, runs depmod, loads brcmfmac |
 | `etc/init.d/S40network` | Starts wpa_supplicant and DHCP |
+| `etc/init.d/S45webd` | Chime HTTPS web daemon supervisor (`chime-webd`) |
 | `etc/init.d/S41timesync` | Syncs system clock from NTP and keeps periodic resync running |
 | `etc/init.d/S50dropbear` | SSH daemon (key-only auth) |
 | `etc/init.d/S99chime` | Chime application with auto-restart and log rotation |
 | `etc/wpa_supplicant/wpa_supplicant.conf` | WiFi credentials (gitignored) |
+| `etc/chime-web/tls` | `chime-webd` self-signed TLS certificate and private key |
 | `etc/inittab` | Getty on ttyS0 for serial console |
 | `root/.ssh/authorized_keys` | SSH public keys (gitignored) |
 

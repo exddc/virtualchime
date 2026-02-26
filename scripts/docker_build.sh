@@ -9,13 +9,16 @@ BUILDROOT_VERSION="$DEFAULT_BUILDROOT_VERSION"
 BUILDROOT_VERSION_SET=0
 JOBS="${JOBS:-}"
 SKIP_IMAGE_BUILD="${SKIP_IMAGE_BUILD:-0}"
+DOCKER_TTY="${DOCKER_TTY:-0}"
 CLEAR_DOCKER_CACHE=0
 
 IMAGE_NAME="virtualchime-builder"
 VOLUME_NAME="virtualchime-buildroot-cache"
 OUTPUT_DIR="$PROJECT_DIR/buildroot/output"
+IMAGE_PATH="$OUTPUT_DIR/sdcard.img"
 VERSION_FILE="$PROJECT_DIR/buildroot/version.env"
 APP_VERSION_FILE="$PROJECT_DIR/chime/VERSION"
+BUILD_META_SCRIPT="$SCRIPT_DIR/write_build_meta.sh"
 
 log() { echo "[docker-build] $*"; }
 error() { echo "[docker-build] ERROR: $*" >&2; exit 1; }
@@ -34,6 +37,7 @@ Options:
 Environment:
   JOBS=<n>              Override parallel make jobs inside the container
   SKIP_IMAGE_BUILD=1    Reuse existing '$IMAGE_NAME' image without rebuilding it
+  DOCKER_TTY=1          Allocate TTY for docker run (default: 0)
 EOF
 }
 
@@ -75,6 +79,10 @@ validate_inputs() {
     case "$SKIP_IMAGE_BUILD" in
         0|1) ;;
         *) error "Invalid SKIP_IMAGE_BUILD='$SKIP_IMAGE_BUILD' (expected 0 or 1)" ;;
+    esac
+    case "$DOCKER_TTY" in
+        0|1) ;;
+        *) error "Invalid DOCKER_TTY='$DOCKER_TTY' (expected 0 or 1)" ;;
     esac
     if [ -n "$JOBS" ]; then
         [[ "$JOBS" =~ ^[0-9]+$ ]] || error "Invalid JOBS='$JOBS' (expected positive integer)"
@@ -139,12 +147,25 @@ check_versions() {
     log "Versions: os=$VIRTUALCHIME_OS_VERSION chime=$app_version config=$CHIME_CONFIG_VERSION"
 }
 
+write_build_metadata() {
+    [ -x "$BUILD_META_SCRIPT" ] || error "Build metadata script not found at $BUILD_META_SCRIPT"
+    "$BUILD_META_SCRIPT"
+}
+
 run_build() {
+    local docker_tty_opt=""
+    if [ "$DOCKER_TTY" = "1" ]; then
+        docker_tty_opt="-t"
+        log "Docker TTY enabled for build container (DOCKER_TTY=1)"
+    else
+        log "Docker TTY disabled for build container (DOCKER_TTY=0)"
+    fi
+
     log "Starting Buildroot build (version $BUILDROOT_VERSION)..."
     mkdir -p "$OUTPUT_DIR"
     docker volume create "$VOLUME_NAME" >/dev/null 2>&1 || true
-    
-    docker run --rm -it \
+
+    docker run --rm ${docker_tty_opt:+$docker_tty_opt} \
         -v "$PROJECT_DIR:/home/builder/virtualchime:ro" \
         -v "$VOLUME_NAME:/home/builder/work" \
         -e BUILDROOT_VERSION="$BUILDROOT_VERSION" \
@@ -218,8 +239,23 @@ fi
     docker run --rm \
         -v "$VOLUME_NAME:/work:ro" \
         -v "$OUTPUT_DIR:/out" \
-        alpine sh -c "cp /work/sdcard.img /out/ 2>/dev/null && echo 'Done' || echo 'Image not found in volume'"
+        alpine sh -c "if [ -f /work/sdcard.img ]; then cp /work/sdcard.img /out/ && echo 'Done'; else echo 'ERROR: Image not found in Docker volume' >&2; exit 1; fi"
     log_timing "export" "$(elapsed "$export_start")"
+}
+
+print_success_summary() {
+    cat <<EOF
+
+[docker-build] SUCCESS
+Image: $IMAGE_PATH
+
+Next:
+  1) Flash SD card:
+     sudo dd if=$IMAGE_PATH of=/dev/rdiskN bs=4m status=progress
+  2) Eject and insert card into the Pi
+  3) (Optional) Clean Docker cache:
+     docker volume rm $VOLUME_NAME
+EOF
 }
 
 parse_args "$@"
@@ -227,12 +263,11 @@ log "Virtual Chime Buildroot Docker Build"
 validate_inputs
 check_secrets
 check_versions
+write_build_metadata
 build_or_reuse_docker_image
 clear_docker_cache_if_requested
 print_container_resources
 run_build
 
-echo ""
-log "Image: $OUTPUT_DIR/sdcard.img"
-echo "Flash: sudo dd if=$OUTPUT_DIR/sdcard.img of=/dev/rdiskN bs=4m status=progress"
-echo "Clean: docker volume rm $VOLUME_NAME"
+[ -f "$IMAGE_PATH" ] || error "Build finished but image is missing at $IMAGE_PATH"
+print_success_summary
