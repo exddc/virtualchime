@@ -72,6 +72,23 @@ Uses Docker to avoid host dependencies. Build artifacts stored in a Docker volum
 ./scripts/docker_build.sh --clear-docker-cache
 ```
 
+## Hardware compatibility and minimum SD card size
+
+- Target hardware: Raspberry Pi Zero W.
+- Raspberry Pi Zero 2 W may run this image but is not officially validated; test in your
+  environment before production use.
+
+Image layout sizing:
+
+- Boot partition: `128M` (`board/raspberrypi0w/genimage.cfg`).
+- Root filesystem image: `256M` (`configs/virtualchime_rpi0w_defconfig`).
+
+That means the generated image is about 384 MB plus partition-table/alignment overhead.
+Practical guidance:
+
+- Absolute minimum card size: **1 GB**
+- Recommended minimum for reliability/availability: **1 GB**
+
 ### Docker resource settings (recommended)
 
 If your Mac is mostly idle during builds, Docker is likely CPU/RAM-limited.
