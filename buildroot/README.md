@@ -75,8 +75,8 @@ Uses Docker to avoid host dependencies. Build artifacts stored in a Docker volum
 ## Hardware compatibility and minimum SD card size
 
 - Target hardware: Raspberry Pi Zero W.
-- Raspberry Pi Zero 2 W can boot this image in many setups, but it is not the primary
-  validated target in this repository; verify in your environment before production use.
+- Raspberry Pi Zero 2 W may run this image but is not officially validated; test in your
+  environment before production use.
 
 Image layout sizing:
 
