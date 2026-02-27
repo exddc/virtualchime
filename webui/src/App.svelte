@@ -46,6 +46,12 @@
     message?: string;
   };
 
+  type ObservedTopicsResponse = {
+    topics?: string[];
+    error?: string;
+    message?: string;
+  };
+
   type SaveResponse = CoreConfigResponse & {
     validation_errors?: ValidationError[];
   };
@@ -68,6 +74,7 @@
 
   let scanResults: WifiNetwork[] = [];
   let selectedScanSsid = "";
+  let observedTopics: string[] = [];
 
   let messageText = "";
   let messageIsError = false;
@@ -169,6 +176,17 @@
     }
   }
 
+  async function loadObservedTopics(): Promise<void> {
+    const response = await fetch("/api/v1/mqtt/topics");
+    const data = (await response.json()) as ObservedTopicsResponse;
+
+    if (!response.ok) {
+      throw new Error(data.error ?? "Failed to load observed topics");
+    }
+
+    observedTopics = data.topics ?? [];
+  }
+
   async function saveConfig(): Promise<void> {
     isSaving = true;
     setMessage("Saving and applying changes...", false);
@@ -234,10 +252,12 @@
   }
 
   onMount(() => {
-    loadConfig().catch((error: unknown) => {
-      const text = error instanceof Error ? error.message : String(error);
-      setMessage(text, true);
-    });
+    loadConfig()
+      .then(() => loadObservedTopics())
+      .catch((error: unknown) => {
+        const text = error instanceof Error ? error.message : String(error);
+        setMessage(text, true);
+      });
   });
 </script>
 
@@ -333,9 +353,31 @@
       </div>
       <div>
         <label for="ring_topic">Ring Topic</label>
-        <input id="ring_topic" bind:value={ringTopic} placeholder="doorbell/ring" />
+        <input id="ring_topic" bind:value={ringTopic} list="observed_topics" placeholder="doorbell/ring" />
+        <datalist id="observed_topics">
+          {#each observedTopics as topic}
+            <option value={topic}></option>
+          {/each}
+        </datalist>
       </div>
     </div>
+    <div class="button-row">
+      <button
+        class="secondary"
+        type="button"
+        on:click={async () => {
+          try {
+            await loadObservedTopics();
+            setMessage("Observed topics refreshed.");
+          } catch (error) {
+            setMessage(error instanceof Error ? error.message : String(error), true);
+          }
+        }}
+      >
+        Refresh Observed Topics
+      </button>
+    </div>
+    <p class="hint">Use suggestions or enter a topic manually.</p>
     <p class="hint">
       {mqttPasswordSet
         ? "MQTT password is set. Leave blank to keep it unchanged."

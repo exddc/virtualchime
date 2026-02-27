@@ -3,6 +3,9 @@
 
 #include <atomic>
 #include <optional>
+#include <string>
+#include <unordered_set>
+#include <vector>
 
 #include "chime/audio_player.h"
 #include "chime/chime_config.h"
@@ -33,6 +36,10 @@ class ChimeService final : public vc::mqtt::EventHandler {
  private:
   void LogWifiState(const WifiState& state) const;
   void LogHealth(bool clock_sane);
+  bool RingTopicMatches(const std::string& message_topic) const;
+  void RecordObservedTopic(const std::string& topic);
+  void LoadObservedTopics();
+  bool PersistObservedTopics(std::string* error) const;
 
   const ChimeConfig& config_;
   vc::logging::Logger& logger_;
@@ -48,6 +55,9 @@ class ChimeService final : public vc::mqtt::EventHandler {
   std::atomic<unsigned long long> heartbeats_sent_{0};
 
   bool clock_was_unsynced_ = false;
+  std::vector<std::string> observed_topics_;
+  std::unordered_set<std::string> observed_topics_set_;
+  bool observed_topics_loaded_ = false;
 };
 
 }  // namespace chime

@@ -2,11 +2,16 @@
 
 #include <mosquitto.h>
 
+#include <algorithm>
 #include <chrono>
 #include <ctime>
+#include <filesystem>
+#include <fstream>
+#include <string_view>
 #include <thread>
 #include <unistd.h>
 
+#include "vc/config/kv_config.h"
 #include "vc/logging/logger.h"
 #include "vc/runtime/signal_handler.h"
 #include "vc/util/filesystem.h"
@@ -21,6 +26,49 @@ constexpr int kReconnectDelaySeconds = 1;
 constexpr int kHealthLogIntervalSeconds = 60;
 constexpr std::time_t kMinimumSaneEpoch = 1704067200;
 constexpr std::size_t kMaxPayloadLogBytes = 256;
+constexpr std::size_t kMaxObservedTopics = 256;
+constexpr const char* kObservedTopicsPath = "/var/lib/chime/observed_topics.txt";
+
+std::vector<std::string> SplitTopic(std::string_view topic) {
+  std::vector<std::string> levels;
+  std::size_t start = 0;
+  while (start <= topic.size()) {
+    const std::size_t slash = topic.find('/', start);
+    if (slash == std::string_view::npos) {
+      levels.emplace_back(topic.substr(start));
+      break;
+    }
+    levels.emplace_back(topic.substr(start, slash - start));
+    start = slash + 1;
+    if (start == topic.size()) {
+      levels.emplace_back("");
+      break;
+    }
+  }
+  return levels;
+}
+
+bool TopicMatchesFilter(std::string_view filter, std::string_view topic) {
+  const auto filter_levels = SplitTopic(filter);
+  const auto topic_levels = SplitTopic(topic);
+
+  std::size_t topic_index = 0;
+  for (std::size_t filter_index = 0; filter_index < filter_levels.size();
+       ++filter_index) {
+    const std::string& filter_level = filter_levels[filter_index];
+    if (filter_level == "#") {
+      return filter_index + 1 == filter_levels.size();
+    }
+    if (topic_index >= topic_levels.size()) {
+      return false;
+    }
+    if (filter_level != "+" && filter_level != topic_levels[topic_index]) {
+      return false;
+    }
+    ++topic_index;
+  }
+  return topic_index == topic_levels.size();
+}
 }  // namespace
 
 ChimeService::ChimeService(const ChimeConfig& config, vc::logging::Logger& logger,
@@ -226,6 +274,7 @@ void ChimeService::OnDisconnect(int rc) {
 
 void ChimeService::OnMessage(const vc::mqtt::Message& message) {
   messages_received_.fetch_add(1, std::memory_order_relaxed);
+  RecordObservedTopic(message.topic);
 
   std::string payload_for_log = vc::util::SanitizePayloadForLog(message.payload);
   if (payload_for_log.size() > kMaxPayloadLogBytes) {
@@ -239,11 +288,106 @@ void ChimeService::OnMessage(const vc::mqtt::Message& message) {
                   std::to_string(message.payload.size()) + " payload='" +
                   payload_for_log + "'");
 
-  if (config_.audio_enabled && message.topic == config_.ring_topic) {
+  if (config_.audio_enabled && RingTopicMatches(message.topic)) {
     ring_messages_received_.fetch_add(1, std::memory_order_relaxed);
     logger_.Info("chime", "ring received");
     audio_player_.Play(config_.sound_path);
   }
+}
+
+bool ChimeService::RingTopicMatches(const std::string& message_topic) const {
+  return TopicMatchesFilter(config_.ring_topic, message_topic);
+}
+
+void ChimeService::RecordObservedTopic(const std::string& topic) {
+  if (topic.empty()) {
+    return;
+  }
+  if (!observed_topics_loaded_) {
+    LoadObservedTopics();
+  }
+
+  const auto [_, inserted] = observed_topics_set_.insert(topic);
+  if (!inserted) {
+    return;
+  }
+  observed_topics_.push_back(topic);
+  logger_.Info("mqtt", "observed topic discovered='" + topic + "'");
+  while (observed_topics_.size() > kMaxObservedTopics) {
+    observed_topics_set_.erase(observed_topics_.front());
+    observed_topics_.erase(observed_topics_.begin());
+  }
+
+  std::string error;
+  if (!PersistObservedTopics(&error)) {
+    logger_.Warn("mqtt", "failed to persist observed topics: " + error);
+  }
+}
+
+void ChimeService::LoadObservedTopics() {
+  observed_topics_loaded_ = true;
+  observed_topics_.clear();
+  observed_topics_set_.clear();
+
+  std::ifstream file(kObservedTopicsPath);
+  if (!file.is_open()) {
+    return;
+  }
+
+  std::string line;
+  while (std::getline(file, line)) {
+    const std::string topic = vc::config::trim(line);
+    if (topic.empty()) {
+      continue;
+    }
+    if (observed_topics_set_.insert(topic).second) {
+      observed_topics_.push_back(topic);
+    }
+  }
+  while (observed_topics_.size() > kMaxObservedTopics) {
+    observed_topics_set_.erase(observed_topics_.front());
+    observed_topics_.erase(observed_topics_.begin());
+  }
+}
+
+bool ChimeService::PersistObservedTopics(std::string* error) const {
+  if (error == nullptr) {
+    return false;
+  }
+
+  const std::filesystem::path topics_path(kObservedTopicsPath);
+  const std::filesystem::path parent = topics_path.parent_path();
+  std::error_code ec;
+  std::filesystem::create_directories(parent, ec);
+  if (ec) {
+    *error = "create directories failed: " + ec.message();
+    return false;
+  }
+
+  const std::filesystem::path temp_path = topics_path.string() + ".tmp";
+  std::ofstream out(temp_path, std::ios::trunc);
+  if (!out.is_open()) {
+    *error = "failed to open temp topics file";
+    return false;
+  }
+
+  for (const auto& topic : observed_topics_) {
+    out << topic << "\n";
+  }
+  out.flush();
+  if (!out.good()) {
+    *error = "failed writing topics";
+    return false;
+  }
+  out.close();
+
+  std::filesystem::rename(temp_path, topics_path, ec);
+  if (ec) {
+    std::filesystem::remove(temp_path, ec);
+    *error = "rename temp topics file failed: " + ec.message();
+    return false;
+  }
+  return true;
 }
 
 void ChimeService::LogWifiState(const WifiState& state) const {

@@ -11,6 +11,7 @@
 #include <fstream>
 #include <map>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -123,6 +124,33 @@ bool ReadFile(const std::filesystem::path& path, std::string* body) {
   stream << file.rdbuf();
   *body = stream.str();
   return true;
+}
+
+std::vector<std::string> ReadObservedTopicsFromFile(
+    const std::string& path, std::string* error) {
+  std::vector<std::string> topics;
+  std::ifstream file(path);
+  if (!file.is_open()) {
+    if (std::filesystem::exists(path)) {
+      if (error != nullptr) {
+        *error = "failed to open observed topics file";
+      }
+    }
+    return topics;
+  }
+
+  std::set<std::string> seen;
+  std::string line;
+  while (std::getline(file, line)) {
+    const std::string topic = vc::config::trim(line);
+    if (topic.empty()) {
+      continue;
+    }
+    if (seen.insert(topic).second) {
+      topics.push_back(topic);
+    }
+  }
+  return topics;
 }
 
 std::string StatusText(int code) {
@@ -468,7 +496,8 @@ cleanup:
 WebServer::WebServer(vc::logging::Logger& logger, ConfigStore& config_store,
                      WifiScanner& wifi_scanner, ApplyManager& apply_manager,
                      std::string bind_address, int port, std::string cert_path,
-                     std::string key_path, std::string ui_dist_dir)
+                     std::string key_path, std::string ui_dist_dir,
+                     std::string observed_topics_path)
     : logger_(logger),
       config_store_(config_store),
       wifi_scanner_(wifi_scanner),
@@ -477,7 +506,8 @@ WebServer::WebServer(vc::logging::Logger& logger, ConfigStore& config_store,
       port_(port),
       cert_path_(std::move(cert_path)),
       key_path_(std::move(key_path)),
-      ui_dist_dir_(std::move(ui_dist_dir)) {}
+      ui_dist_dir_(std::move(ui_dist_dir)),
+      observed_topics_path_(std::move(observed_topics_path)) {}
 
 WebServer::~WebServer() { Stop(); }
 
@@ -788,6 +818,16 @@ WebServer::HttpResponse WebServer::Route(const HttpRequest& request) {
     return HandleWifiScan();
   }
 
+  if (request.path == "/api/v1/mqtt/topics") {
+    if (request.method != "GET") {
+      HttpResponse response;
+      response.status = 405;
+      response.body = "{\"error\":\"method_not_allowed\"}";
+      return response;
+    }
+    return HandleGetObservedTopics();
+  }
+
   if (request.path == "/api/v1/system" || request.path == "/api/v1/device" ||
       request.path == "/api/v1/diagnostics" ||
       request.path.rfind("/api/v1/system/", 0) == 0 ||
@@ -1022,6 +1062,23 @@ WebServer::HttpResponse WebServer::HandleWifiScan() {
   response.body += "]";
   response.body += "}";
 
+  return response;
+}
+
+WebServer::HttpResponse WebServer::HandleGetObservedTopics() {
+  HttpResponse response;
+  std::string read_error;
+  const std::vector<std::string> topics =
+      ReadObservedTopicsFromFile(observed_topics_path_, &read_error);
+
+  if (!read_error.empty()) {
+    logger_.Warn("webd", read_error + " path=" + observed_topics_path_);
+  }
+
+  response.status = 200;
+  response.body = "{";
+  response.body += "\"topics\":" + SerializeTopics(topics);
+  response.body += "}";
   return response;
 }
 

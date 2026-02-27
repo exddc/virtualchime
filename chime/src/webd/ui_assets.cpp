@@ -175,9 +175,14 @@ const std::string& MainPageHtml() {
         </div>
         <div>
           <label for="ring_topic">Ring Topic</label>
-          <input id="ring_topic" placeholder="doorbell/ring" />
+          <input id="ring_topic" list="observed_topics" placeholder="doorbell/ring" />
+          <datalist id="observed_topics"></datalist>
         </div>
       </div>
+      <div style="margin-top: 10px;">
+        <button type="button" class="secondary" id="refresh_topics_btn">Refresh Observed Topics</button>
+      </div>
+      <p class="hint">Use suggestions or enter a topic manually.</p>
       <p id="mqtt_password_hint" class="hint">No MQTT password saved yet.</p>
       <div class="row">
         <div>
@@ -294,6 +299,24 @@ const std::string& MainPageHtml() {
         option.value = entry.ssid;
         option.textContent = `${entry.ssid} (${entry.signal_dbm} dBm, ${entry.security})`;
         select.appendChild(option);
+      });
+    }
+
+    async function loadObservedTopics() {
+      const list = document.getElementById('observed_topics');
+      list.innerHTML = '';
+
+      const response = await fetch('/api/v1/mqtt/topics');
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to load observed topics');
+      }
+
+      const topics = data.topics || [];
+      topics.forEach((topic) => {
+        const option = document.createElement('option');
+        option.value = topic;
+        list.appendChild(option);
       });
     }
 
@@ -426,7 +449,18 @@ const std::string& MainPageHtml() {
       }
     });
 
-    loadConfig().catch((error) => setMessage(error.message || String(error), true));
+    document.getElementById('refresh_topics_btn').addEventListener('click', async () => {
+      try {
+        await loadObservedTopics();
+        setMessage('Observed topics refreshed.');
+      } catch (error) {
+        setMessage(error.message || String(error), true);
+      }
+    });
+
+    loadConfig()
+      .then(() => loadObservedTopics())
+      .catch((error) => setMessage(error.message || String(error), true));
   </script>
 </body>
 </html>

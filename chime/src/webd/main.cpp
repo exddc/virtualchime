@@ -31,6 +31,7 @@ constexpr const char* kNetworkRestartCommand =
     "/etc/init.d/S40network restart >/dev/null 2>&1";
 constexpr const char* kChimeRestartCommand =
     "/etc/init.d/S99chime restart >/dev/null 2>&1";
+constexpr const char* kObservedTopicsPath = "/var/lib/chime/observed_topics.txt";
 
 std::string EnvOrDefault(const char* key, const char* fallback) {
   const std::string value = vc::util::GetEnv(key);
@@ -113,6 +114,7 @@ void PrintUsage(const char* program) {
   std::cout << "  CHIME_WEBD_CHIME_RESTART_CMD\n";
   std::cout << "  CHIME_WEBD_MDNS_ENABLED\n";
   std::cout << "  CHIME_WEBD_UI_DIST_DIR\n";
+  std::cout << "  CHIME_WEBD_OBSERVED_TOPICS_PATH\n";
 }
 
 }  // namespace
@@ -148,6 +150,8 @@ int main(int argc, char* argv[]) {
   const std::string tls_key_path =
       EnvOrDefault("CHIME_WEBD_TLS_KEY", kTlsKeyPath);
   const std::string ui_dist_dir = vc::util::GetEnv("CHIME_WEBD_UI_DIST_DIR");
+  const std::string observed_topics_path =
+      EnvOrDefault("CHIME_WEBD_OBSERVED_TOPICS_PATH", kObservedTopicsPath);
   const std::string bind_address =
       EnvOrDefault("CHIME_WEBD_BIND_ADDRESS", kBindAddress);
   const int listen_port = EnvIntOrDefault("CHIME_WEBD_PORT", kListenPort);
@@ -172,7 +176,8 @@ int main(int argc, char* argv[]) {
                                           chime_restart_command);
   chime::webd::WebServer web_server(logger, config_store, wifi_scanner,
                                      apply_manager, bind_address, listen_port,
-                                     tls_cert_path, tls_key_path, ui_dist_dir);
+                                     tls_cert_path, tls_key_path, ui_dist_dir,
+                                     observed_topics_path);
   chime::webd::MdnsResponder mdns(logger, host_label, wifi_interface);
 
   if (!web_server.Start()) {

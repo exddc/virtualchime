@@ -21,6 +21,7 @@ Operational runbook: `RELIABILITY_RUNBOOK.md`.
   - `GET /api/v1/config/core`
   - `POST /api/v1/config/core`
   - `GET /api/v1/wifi/scan`
+  - `GET /api/v1/mqtt/topics` (observed MQTT topics for ring-topic suggestions)
 - Reserves `/api/v1/system/*`, `/api/v1/device/*`, and `/api/v1/diagnostics/*` for future API expansion (`501` responses in v1).
 - Uses self-signed TLS cert/key at:
   - `/etc/chime-web/tls/cert.pem`
@@ -56,6 +57,7 @@ Daemon keys:
 - `heartbeat_interval` (0 disables)
 - `heartbeat_topic`
 - `ring_topic`
+  - Supports MQTT topic filters (`+` and `#`) for matching incoming message topics
 - `sound_path`
 - `audio_enabled`
 - `wifi_interface`
