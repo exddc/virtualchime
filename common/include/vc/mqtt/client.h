@@ -21,6 +21,13 @@ struct Message {
 
 struct ConnectOptions {
   std::string client_id;
+  std::string username;
+  std::string password;
+  bool tls_enabled = false;
+  bool tls_validate_certificate = true;
+  std::string tls_ca_file;
+  std::string tls_cert_file;
+  std::string tls_key_file;
   int keepalive_seconds = 60;
   int reconnect_min_seconds = 2;
   int reconnect_max_seconds = 10;

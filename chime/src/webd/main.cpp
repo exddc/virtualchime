@@ -112,6 +112,7 @@ void PrintUsage(const char* program) {
   std::cout << "  CHIME_WEBD_NETWORK_RESTART_CMD\n";
   std::cout << "  CHIME_WEBD_CHIME_RESTART_CMD\n";
   std::cout << "  CHIME_WEBD_MDNS_ENABLED\n";
+  std::cout << "  CHIME_WEBD_UI_DIST_DIR\n";
 }
 
 }  // namespace
@@ -146,6 +147,7 @@ int main(int argc, char* argv[]) {
       EnvOrDefault("CHIME_WEBD_TLS_CERT", kTlsCertPath);
   const std::string tls_key_path =
       EnvOrDefault("CHIME_WEBD_TLS_KEY", kTlsKeyPath);
+  const std::string ui_dist_dir = vc::util::GetEnv("CHIME_WEBD_UI_DIST_DIR");
   const std::string bind_address =
       EnvOrDefault("CHIME_WEBD_BIND_ADDRESS", kBindAddress);
   const int listen_port = EnvIntOrDefault("CHIME_WEBD_PORT", kListenPort);
@@ -170,7 +172,7 @@ int main(int argc, char* argv[]) {
                                           chime_restart_command);
   chime::webd::WebServer web_server(logger, config_store, wifi_scanner,
                                      apply_manager, bind_address, listen_port,
-                                     tls_cert_path, tls_key_path);
+                                     tls_cert_path, tls_key_path, ui_dist_dir);
   chime::webd::MdnsResponder mdns(logger, host_label, wifi_interface);
 
   if (!web_server.Start()) {

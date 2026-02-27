@@ -13,6 +13,8 @@ RUNTIME_DIR="$BUILD_DIR/runtime"
 RUNTIME_TLS_DIR="$RUNTIME_DIR/tls"
 RUNTIME_CHIME_CONFIG="$RUNTIME_DIR/chime.conf"
 RUNTIME_WPA_CONFIG="$RUNTIME_DIR/wpa_supplicant.conf"
+WEBUI_DIR="$PROJECT_DIR/webui"
+WEBUI_DIST_DIR="$WEBUI_DIR/dist"
 
 DEFAULT_CONFIG="$PROJECT_DIR/buildroot/board/raspberrypi0w/rootfs_overlay/etc/chime.conf"
 DEFAULT_WPA_CONFIG="$PROJECT_DIR/buildroot/board/raspberrypi0w/rootfs_overlay/etc/wpa_supplicant/wpa_supplicant.conf"
@@ -22,6 +24,13 @@ APP_VERSION_FILE="$PROJECT_DIR/chime/VERSION"
 
 log() { echo "[local-chime] $*"; }
 error() { echo "[local-chime] ERROR: $*" >&2; exit 1; }
+
+require_bun() {
+    if ! command -v bun &>/dev/null; then
+        error "bun is required for web UI commands. Install with:
+  curl -fsSL https://bun.sh/install | bash"
+    fi
+}
 
 get_mosquitto_flags() {
     if [ -n "${MOSQUITTO_CFLAGS:-}" ] || [ -n "${MOSQUITTO_LIBS:-}" ]; then
@@ -192,6 +201,58 @@ build() {
     load_versions
     build_chime_binary
     build_webd_binary
+
+    if [ "${LOCAL_CHIME_BUILD_WEBUI:-0}" = "1" ]; then
+        build_webui
+    fi
+}
+
+build_webui() {
+    [ -d "$WEBUI_DIR" ] || error "Web UI directory not found: $WEBUI_DIR"
+    [ -f "$WEBUI_DIR/package.json" ] || error "Missing $WEBUI_DIR/package.json"
+    require_bun
+
+    log "Installing web UI dependencies..."
+    (
+        cd "$WEBUI_DIR"
+        bun install --frozen-lockfile 2>/dev/null || bun install
+    )
+
+    log "Building web UI..."
+    (
+        cd "$WEBUI_DIR"
+        bun run build
+    )
+
+    log "Built web UI dist: $WEBUI_DIST_DIR"
+}
+
+run_webui_dev() {
+    [ -d "$WEBUI_DIR" ] || error "Web UI directory not found: $WEBUI_DIR"
+    [ -f "$WEBUI_DIR/package.json" ] || error "Missing $WEBUI_DIR/package.json"
+    require_bun
+
+    local dev_host="${WEBUI_DEV_HOST:-127.0.0.1}"
+    local dev_port="${WEBUI_DEV_PORT:-5173}"
+
+    log "Starting web UI dev server at http://$dev_host:$dev_port"
+    (
+        cd "$WEBUI_DIR"
+        bun install --frozen-lockfile 2>/dev/null || bun install
+        bun run dev -- --host "$dev_host" --port "$dev_port"
+    )
+}
+
+resolve_webui_dist_dir() {
+    if [ -n "${CHIME_WEBD_UI_DIST_DIR:-}" ]; then
+        echo "$CHIME_WEBD_UI_DIST_DIR"
+        return
+    fi
+    if [ -d "$WEBUI_DIST_DIR" ]; then
+        echo "$WEBUI_DIST_DIR"
+        return
+    fi
+    echo ""
 }
 
 prepare_runtime() {
@@ -249,18 +310,29 @@ run_webd_only() {
     if [ ! -x "$WEBD_BIN" ]; then
         build
     fi
+    if [ "${LOCAL_CHIME_BUILD_WEBUI:-0}" = "1" ]; then
+        build_webui
+    fi
 
     local config_path="${2:-${CHIME_CONFIG:-$DEFAULT_CONFIG}}"
     prepare_runtime "$config_path"
 
     local web_bind="${CHIME_WEBD_BIND_ADDRESS:-127.0.0.1}"
     local web_port="${CHIME_WEBD_PORT:-8443}"
+    local ui_dist_dir
+    ui_dist_dir="$(resolve_webui_dist_dir)"
 
     log "Starting chime-webd on https://$web_bind:$web_port"
+    if [ -n "$ui_dist_dir" ]; then
+        log "Serving web UI from: $ui_dist_dir"
+    else
+        log "Serving embedded web UI fallback (no dist dir configured/found)"
+    fi
     CHIME_WEBD_CHIME_CONFIG="$RUNTIME_CHIME_CONFIG" \
     CHIME_WEBD_WPA_SUPPLICANT="$RUNTIME_WPA_CONFIG" \
     CHIME_WEBD_TLS_CERT="${CHIME_WEBD_TLS_CERT:-$RUNTIME_TLS_DIR/cert.pem}" \
     CHIME_WEBD_TLS_KEY="${CHIME_WEBD_TLS_KEY:-$RUNTIME_TLS_DIR/key.pem}" \
+    CHIME_WEBD_UI_DIST_DIR="$ui_dist_dir" \
     CHIME_WEBD_BIND_ADDRESS="$web_bind" \
     CHIME_WEBD_PORT="$web_port" \
     CHIME_WEBD_MDNS_ENABLED="${CHIME_WEBD_MDNS_ENABLED:-false}" \
@@ -273,6 +345,9 @@ run_stack() {
     if [ ! -x "$CHIME_BIN" ] || [ ! -x "$WEBD_BIN" ]; then
         build
     fi
+    if [ "${LOCAL_CHIME_BUILD_WEBUI:-0}" = "1" ]; then
+        build_webui
+    fi
 
     local config_path="${2:-${CHIME_CONFIG:-$DEFAULT_CONFIG}}"
     prepare_runtime "$config_path"
@@ -280,10 +355,17 @@ run_stack() {
     local client_id="${CHIME_MQTT_CLIENT_ID:-chime-local-$(hostname -s)}"
     local web_bind="${CHIME_WEBD_BIND_ADDRESS:-127.0.0.1}"
     local web_port="${CHIME_WEBD_PORT:-8443}"
+    local ui_dist_dir
+    ui_dist_dir="$(resolve_webui_dist_dir)"
 
     log "Starting local stack"
     log "  chime config: $RUNTIME_CHIME_CONFIG"
     log "  web URL: https://$web_bind:$web_port"
+    if [ -n "$ui_dist_dir" ]; then
+        log "  web UI dist: $ui_dist_dir"
+    else
+        log "  web UI dist: embedded fallback"
+    fi
 
     local restart_delay="${LOCAL_SUPERVISOR_RESTART_DELAY:-2}"
 
@@ -311,6 +393,7 @@ run_stack() {
             CHIME_WEBD_WPA_SUPPLICANT="$RUNTIME_WPA_CONFIG" \
             CHIME_WEBD_TLS_CERT="${CHIME_WEBD_TLS_CERT:-$RUNTIME_TLS_DIR/cert.pem}" \
             CHIME_WEBD_TLS_KEY="${CHIME_WEBD_TLS_KEY:-$RUNTIME_TLS_DIR/key.pem}" \
+            CHIME_WEBD_UI_DIST_DIR="$ui_dist_dir" \
             CHIME_WEBD_BIND_ADDRESS="$web_bind" \
             CHIME_WEBD_PORT="$web_port" \
             CHIME_WEBD_MDNS_ENABLED="${CHIME_WEBD_MDNS_ENABLED:-false}" \
@@ -348,9 +431,11 @@ run_stack() {
 
 usage() {
     cat <<EOF
-Usage: $0 [build|run|run-chime|run-webd] [config_path]
+Usage: $0 [build|webui-build|webui-dev|run|run-chime|run-webd] [config_path]
 
 build:      Build local chime and chime-webd binaries
+webui-build: Build Svelte web UI into webui/dist
+webui-dev:   Run Vite dev server for fast UI iteration
 run:        Build if needed and run both daemons (mirrors Raspberry layout)
 run-chime:  Build if needed and run only chime
 run-webd:   Build if needed and run only chime-webd
@@ -360,10 +445,16 @@ By default, runtime state is stored under:
 
 Environment overrides:
   CHIME_MQTT_CLIENT_ID            MQTT client id for local chime run
+  CHIME_MQTT_USERNAME             MQTT username override for local chime run
+  CHIME_MQTT_PASSWORD             MQTT password override for local chime run
   CHIME_WEBD_BIND_ADDRESS         webd bind address (default: 127.0.0.1)
   CHIME_WEBD_PORT                 webd port (default: 8443)
+  CHIME_WEBD_UI_DIST_DIR          static UI dist directory (defaults to webui/dist)
   CHIME_WEBD_NETWORK_RESTART_CMD  apply command override (default: true locally)
   CHIME_WEBD_CHIME_RESTART_CMD    apply command override (default: true locally)
+  LOCAL_CHIME_BUILD_WEBUI=1       build webui/dist during build/run
+  WEBUI_DEV_HOST                  Vite dev host (default: 127.0.0.1)
+  WEBUI_DEV_PORT                  Vite dev port (default: 5173)
   REFRESH_RUNTIME_FILES=1         reset runtime config/wpa files from source
 
 Examples:
@@ -371,6 +462,8 @@ Examples:
   $0 run
   $0 run /path/to/chime.conf
   CHIME_WEBD_PORT=9443 $0 run
+  $0 webui-build
+  $0 webui-dev
   $0 run-webd
 EOF
 }
@@ -379,6 +472,12 @@ ACTION="${1:-build}"
 case "$ACTION" in
     build)
         build
+        ;;
+    webui-build)
+        build_webui
+        ;;
+    webui-dev)
+        run_webui_dev
         ;;
     run)
         run_stack "$@"

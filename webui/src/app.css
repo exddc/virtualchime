@@ -1,0 +1,150 @@
+:root {
+  --bg: #f2f4f7;
+  --card: #ffffff;
+  --text: #1f2937;
+  --muted: #4b5563;
+  --accent: #0f766e;
+  --error: #b91c1c;
+  --border: #d1d5db;
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+  background: linear-gradient(180deg, #e5f3f1 0%, var(--bg) 55%);
+  color: var(--text);
+}
+
+.wrap {
+  max-width: 880px;
+  margin: 32px auto;
+  padding: 0 16px 32px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 18px;
+  box-shadow: 0 6px 24px rgba(15, 118, 110, 0.08);
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 28px;
+}
+
+h2 {
+  margin: 0 0 12px;
+  font-size: 20px;
+}
+
+p {
+  margin: 0 0 14px;
+  color: var(--muted);
+}
+
+label {
+  display: block;
+  margin: 10px 0 6px;
+  font-weight: 600;
+}
+
+input,
+select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  background: #fff;
+}
+
+input[type="checkbox"] {
+  width: auto;
+  padding: 0;
+  margin-top: 12px;
+}
+
+button {
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+button.secondary {
+  background: #334155;
+}
+
+.row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.button-row {
+  margin-top: 12px;
+}
+
+.message {
+  margin-top: 10px;
+  padding: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  background: #ecfeff;
+  border: 1px solid #a5f3fc;
+  color: #155e75;
+  white-space: pre-wrap;
+}
+
+.message.error {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: var(--error);
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(21, 94, 117, 0.2);
+  border-top-color: #155e75;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex: 0 0 auto;
+}
+
+.message.error .spinner {
+  border: 2px solid rgba(185, 28, 28, 0.2);
+  border-top-color: var(--error);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.hint {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+@media (max-width: 740px) {
+  .row {
+    grid-template-columns: 1fr;
+  }
+}

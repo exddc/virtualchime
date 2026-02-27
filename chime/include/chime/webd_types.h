@@ -17,6 +17,13 @@ struct CoreConfig {
   std::string mqtt_host;
   int mqtt_port = 1883;
   std::string mqtt_client_id = "chime";
+  std::string mqtt_username;
+  std::string mqtt_password;
+  bool mqtt_tls_enabled = false;
+  bool mqtt_tls_validate_certificate = true;
+  std::string mqtt_tls_ca_file;
+  std::string mqtt_tls_cert_file;
+  std::string mqtt_tls_key_file;
   std::vector<std::string> mqtt_topics;
   std::string ring_topic = "doorbell/ring";
 };
@@ -24,6 +31,7 @@ struct CoreConfig {
 struct CoreConfigSnapshot {
   CoreConfig config;
   bool wifi_password_set = false;
+  bool mqtt_password_set = false;
 };
 
 struct ApplyStatus {
@@ -37,6 +45,7 @@ struct ApplyStatus {
 struct SaveRequest {
   CoreConfig config;
   std::optional<std::string> wifi_password;
+  std::optional<std::string> mqtt_password;
 };
 
 struct SaveResult {

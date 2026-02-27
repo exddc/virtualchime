@@ -12,6 +12,13 @@ struct ChimeConfig {
   std::string host;
   int port = 0;
   std::string client_id = "chime";
+  std::string mqtt_username;
+  std::string mqtt_password;
+  bool mqtt_tls_enabled = false;
+  bool mqtt_tls_validate_certificate = true;
+  std::string mqtt_tls_ca_file;
+  std::string mqtt_tls_cert_file;
+  std::string mqtt_tls_key_file;
   std::vector<std::string> topics;
   int mqtt_subscribe_qos = 0;
   int heartbeat_interval = 60;

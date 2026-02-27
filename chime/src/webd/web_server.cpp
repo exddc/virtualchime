@@ -42,10 +42,87 @@ namespace {
 constexpr std::size_t kMaxRequestBytes = 65536;
 constexpr std::size_t kMaxBodyBytes = 32768;
 
+bool StartsWith(const std::string& value, const std::string& prefix) {
+  return value.size() >= prefix.size() &&
+         value.compare(0, prefix.size(), prefix) == 0;
+}
+
 std::string ToLower(std::string value) {
   std::transform(value.begin(), value.end(), value.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   return value;
+}
+
+bool IsSafeRelativePath(const std::filesystem::path& path) {
+  for (const auto& part : path) {
+    if (part == "..") {
+      return false;
+    }
+  }
+  return true;
+}
+
+std::string ContentTypeForPath(const std::filesystem::path& path) {
+  const std::string extension = ToLower(path.extension().string());
+  if (extension == ".html") {
+    return "text/html; charset=utf-8";
+  }
+  if (extension == ".css") {
+    return "text/css; charset=utf-8";
+  }
+  if (extension == ".js") {
+    return "application/javascript; charset=utf-8";
+  }
+  if (extension == ".json") {
+    return "application/json; charset=utf-8";
+  }
+  if (extension == ".svg") {
+    return "image/svg+xml";
+  }
+  if (extension == ".ico") {
+    return "image/x-icon";
+  }
+  if (extension == ".png") {
+    return "image/png";
+  }
+  if (extension == ".jpg" || extension == ".jpeg") {
+    return "image/jpeg";
+  }
+  if (extension == ".webp") {
+    return "image/webp";
+  }
+  if (extension == ".woff2") {
+    return "font/woff2";
+  }
+  if (extension == ".woff") {
+    return "font/woff";
+  }
+  return "application/octet-stream";
+}
+
+std::string CacheControlForPath(const std::string& request_path,
+                                const std::filesystem::path& path) {
+  if (ToLower(path.extension().string()) == ".html") {
+    return "no-cache";
+  }
+  if (StartsWith(request_path, "/assets/")) {
+    return "public, max-age=31536000, immutable";
+  }
+  return "public, max-age=3600";
+}
+
+bool ReadFile(const std::filesystem::path& path, std::string* body) {
+  if (body == nullptr) {
+    return false;
+  }
+  std::ifstream file(path, std::ios::binary);
+  if (!file.is_open()) {
+    return false;
+  }
+  std::ostringstream stream;
+  stream << file.rdbuf();
+  *body = stream.str();
+  return true;
 }
 
 std::string StatusText(int code) {
@@ -132,6 +209,28 @@ std::optional<int> ReadRequiredInt(const JsonValue& object, const std::string& k
   }
 
   return rounded;
+}
+
+std::optional<bool> ReadRequiredBool(const JsonValue& object,
+                                     const std::string& key,
+                                     std::vector<ValidationError>* errors) {
+  const auto field = GetObjectField(object, key);
+  if (!field.has_value()) {
+    if (errors != nullptr) {
+      errors->push_back({key, key + " is required"});
+    }
+    return std::nullopt;
+  }
+
+  bool value = false;
+  if (!field->AsBool(&value)) {
+    if (errors != nullptr) {
+      errors->push_back({key, key + " must be a boolean"});
+    }
+    return std::nullopt;
+  }
+
+  return value;
 }
 
 std::optional<std::vector<std::string>> ReadRequiredStringArray(
@@ -369,7 +468,7 @@ cleanup:
 WebServer::WebServer(vc::logging::Logger& logger, ConfigStore& config_store,
                      WifiScanner& wifi_scanner, ApplyManager& apply_manager,
                      std::string bind_address, int port, std::string cert_path,
-                     std::string key_path)
+                     std::string key_path, std::string ui_dist_dir)
     : logger_(logger),
       config_store_(config_store),
       wifi_scanner_(wifi_scanner),
@@ -377,7 +476,8 @@ WebServer::WebServer(vc::logging::Logger& logger, ConfigStore& config_store,
       bind_address_(std::move(bind_address)),
       port_(port),
       cert_path_(std::move(cert_path)),
-      key_path_(std::move(key_path)) {}
+      key_path_(std::move(key_path)),
+      ui_dist_dir_(std::move(ui_dist_dir)) {}
 
 WebServer::~WebServer() { Stop(); }
 
@@ -539,7 +639,7 @@ void WebServer::HandleConnection(int client_fd) {
          StatusText(response.status) + "\r\n";
   raw += "Content-Type: " + response.content_type + "\r\n";
   raw += "Content-Length: " + std::to_string(response.body.size()) + "\r\n";
-  raw += "Cache-Control: no-store\r\n";
+  raw += "Cache-Control: " + response.cache_control + "\r\n";
   raw += "Connection: close\r\n";
   raw += "\r\n";
   raw += response.body;
@@ -665,14 +765,6 @@ bool WebServer::ReadHttpRequest(void* ssl_ptr, HttpRequest* request,
 }
 
 WebServer::HttpResponse WebServer::Route(const HttpRequest& request) {
-  if (request.method == "GET" && request.path == "/") {
-    HttpResponse response;
-    response.status = 200;
-    response.content_type = "text/html; charset=utf-8";
-    response.body = MainPageHtml();
-    return response;
-  }
-
   if (request.path == "/api/v1/config/core") {
     if (request.method == "GET") {
       return HandleGetCoreConfig();
@@ -704,6 +796,19 @@ WebServer::HttpResponse WebServer::Route(const HttpRequest& request) {
     return ReservedNotImplemented(request.path);
   }
 
+  if (const auto ui_response = TryServeExternalUi(request);
+      ui_response.has_value()) {
+    return *ui_response;
+  }
+
+  if (request.method == "GET" && request.path == "/") {
+    HttpResponse response;
+    response.status = 200;
+    response.content_type = "text/html; charset=utf-8";
+    response.body = MainPageHtml();
+    return response;
+  }
+
   HttpResponse response;
   response.status = 404;
   response.body = "{\"error\":\"not_found\"}";
@@ -732,10 +837,28 @@ WebServer::HttpResponse WebServer::HandleGetCoreConfig() {
       "\"mqtt_port\":" + JsonNumber(loaded.snapshot.config.mqtt_port) + ",";
   response.body += "\"mqtt_client_id\":" +
                    JsonString(loaded.snapshot.config.mqtt_client_id) + ",";
+  response.body += "\"mqtt_username\":" +
+                   JsonString(loaded.snapshot.config.mqtt_username) + ",";
+  response.body += "\"mqtt_password_set\":" +
+                   JsonBool(loaded.snapshot.mqtt_password_set) + ",";
+  response.body += "\"mqtt_tls_enabled\":" +
+                   JsonBool(loaded.snapshot.config.mqtt_tls_enabled) + ",";
+  response.body += "\"mqtt_tls_validate_certificate\":" +
+                   JsonBool(
+                       loaded.snapshot.config.mqtt_tls_validate_certificate) +
+                   ",";
+  response.body += "\"mqtt_tls_ca_file\":" +
+                   JsonString(loaded.snapshot.config.mqtt_tls_ca_file) + ",";
+  response.body += "\"mqtt_tls_cert_file\":" +
+                   JsonString(loaded.snapshot.config.mqtt_tls_cert_file) + ",";
+  response.body += "\"mqtt_tls_key_file\":" +
+                   JsonString(loaded.snapshot.config.mqtt_tls_key_file) + ",";
   response.body += "\"mqtt_topics\":" +
                    SerializeTopics(loaded.snapshot.config.mqtt_topics) + ",";
   response.body +=
-      "\"ring_topic\":" + JsonString(loaded.snapshot.config.ring_topic);
+      "\"ring_topic\":" + JsonString(loaded.snapshot.config.ring_topic) + ",";
+  response.body +=
+      "\"apply\":" + SerializeApplyStatus(apply_manager_.CurrentStatus());
   response.body += "}";
   return response;
 }
@@ -767,11 +890,25 @@ WebServer::HttpResponse WebServer::HandlePostCoreConfig(
   const auto mqtt_port = ReadRequiredInt(parsed.value, "mqtt_port", &parse_errors);
   const auto mqtt_client_id =
       ReadRequiredString(parsed.value, "mqtt_client_id", &parse_errors);
+  const auto mqtt_username =
+      ReadRequiredString(parsed.value, "mqtt_username", &parse_errors);
+  const auto mqtt_tls_enabled =
+      ReadRequiredBool(parsed.value, "mqtt_tls_enabled", &parse_errors);
+  const auto mqtt_tls_validate_certificate = ReadRequiredBool(
+      parsed.value, "mqtt_tls_validate_certificate", &parse_errors);
+  const auto mqtt_tls_ca_file =
+      ReadRequiredString(parsed.value, "mqtt_tls_ca_file", &parse_errors);
+  const auto mqtt_tls_cert_file =
+      ReadRequiredString(parsed.value, "mqtt_tls_cert_file", &parse_errors);
+  const auto mqtt_tls_key_file =
+      ReadRequiredString(parsed.value, "mqtt_tls_key_file", &parse_errors);
   const auto mqtt_topics =
       ReadRequiredStringArray(parsed.value, "mqtt_topics", &parse_errors);
   const auto ring_topic = ReadRequiredString(parsed.value, "ring_topic", &parse_errors);
   const auto wifi_password =
       ReadOptionalString(parsed.value, "wifi_password", &parse_errors);
+  const auto mqtt_password =
+      ReadOptionalString(parsed.value, "mqtt_password", &parse_errors);
 
   if (!parse_errors.empty()) {
     response.status = 400;
@@ -787,9 +924,17 @@ WebServer::HttpResponse WebServer::HandlePostCoreConfig(
   save_request.config.mqtt_host = *mqtt_host;
   save_request.config.mqtt_port = *mqtt_port;
   save_request.config.mqtt_client_id = *mqtt_client_id;
+  save_request.config.mqtt_username = *mqtt_username;
+  save_request.config.mqtt_tls_enabled = *mqtt_tls_enabled;
+  save_request.config.mqtt_tls_validate_certificate =
+      *mqtt_tls_validate_certificate;
+  save_request.config.mqtt_tls_ca_file = *mqtt_tls_ca_file;
+  save_request.config.mqtt_tls_cert_file = *mqtt_tls_cert_file;
+  save_request.config.mqtt_tls_key_file = *mqtt_tls_key_file;
   save_request.config.mqtt_topics = *mqtt_topics;
   save_request.config.ring_topic = *ring_topic;
   save_request.wifi_password = wifi_password;
+  save_request.mqtt_password = mqtt_password;
 
   const SaveResult saved = config_store_.SaveCoreConfig(save_request);
   if (!saved.validation_errors.empty()) {
@@ -823,6 +968,22 @@ WebServer::HttpResponse WebServer::HandlePostCoreConfig(
       "\"mqtt_port\":" + JsonNumber(saved.snapshot.config.mqtt_port) + ",";
   response.body += "\"mqtt_client_id\":" +
                    JsonString(saved.snapshot.config.mqtt_client_id) + ",";
+  response.body += "\"mqtt_username\":" +
+                   JsonString(saved.snapshot.config.mqtt_username) + ",";
+  response.body += "\"mqtt_password_set\":" +
+                   JsonBool(saved.snapshot.mqtt_password_set) + ",";
+  response.body += "\"mqtt_tls_enabled\":" +
+                   JsonBool(saved.snapshot.config.mqtt_tls_enabled) + ",";
+  response.body += "\"mqtt_tls_validate_certificate\":" +
+                   JsonBool(
+                       saved.snapshot.config.mqtt_tls_validate_certificate) +
+                   ",";
+  response.body += "\"mqtt_tls_ca_file\":" +
+                   JsonString(saved.snapshot.config.mqtt_tls_ca_file) + ",";
+  response.body += "\"mqtt_tls_cert_file\":" +
+                   JsonString(saved.snapshot.config.mqtt_tls_cert_file) + ",";
+  response.body += "\"mqtt_tls_key_file\":" +
+                   JsonString(saved.snapshot.config.mqtt_tls_key_file) + ",";
   response.body += "\"mqtt_topics\":" +
                    SerializeTopics(saved.snapshot.config.mqtt_topics) + ",";
   response.body +=
@@ -861,6 +1022,81 @@ WebServer::HttpResponse WebServer::HandleWifiScan() {
   response.body += "]";
   response.body += "}";
 
+  return response;
+}
+
+std::optional<WebServer::HttpResponse> WebServer::TryServeExternalUi(
+    const HttpRequest& request) const {
+  if (ui_dist_dir_.empty() || request.method != "GET") {
+    return std::nullopt;
+  }
+  if (request.path.empty() || request.path[0] != '/' ||
+      StartsWith(request.path, "/api/")) {
+    return std::nullopt;
+  }
+
+  const std::filesystem::path root(ui_dist_dir_);
+  std::error_code ec;
+  if (!std::filesystem::exists(root, ec) || !std::filesystem::is_directory(root, ec)) {
+    return std::nullopt;
+  }
+
+  auto response_from_file = [&](const std::filesystem::path& file_path,
+                                const std::string& request_path)
+      -> std::optional<HttpResponse> {
+    if (!std::filesystem::exists(file_path, ec) ||
+        !std::filesystem::is_regular_file(file_path, ec)) {
+      return std::nullopt;
+    }
+    std::string body;
+    if (!ReadFile(file_path, &body)) {
+      HttpResponse response;
+      response.status = 500;
+      response.body = "{\"error\":\"ui_read_failed\"}";
+      return response;
+    }
+    HttpResponse response;
+    response.status = 200;
+    response.content_type = ContentTypeForPath(file_path);
+    response.cache_control = CacheControlForPath(request_path, file_path);
+    response.body = std::move(body);
+    return response;
+  };
+
+  if (request.path == "/") {
+    const auto index_response = response_from_file(root / "index.html", "/");
+    if (index_response.has_value()) {
+      return index_response;
+    }
+    return std::nullopt;
+  }
+
+  const std::filesystem::path relative_path =
+      std::filesystem::path(request.path).relative_path();
+  if (relative_path.empty() || !IsSafeRelativePath(relative_path)) {
+    HttpResponse response;
+    response.status = 404;
+    response.body = "{\"error\":\"not_found\"}";
+    return response;
+  }
+
+  if (const auto file_response =
+          response_from_file(root / relative_path, request.path);
+      file_response.has_value()) {
+    return file_response;
+  }
+
+  if (!StartsWith(request.path, "/assets/") &&
+      relative_path.extension().empty()) {
+    if (const auto fallback_index = response_from_file(root / "index.html", "/");
+        fallback_index.has_value()) {
+      return fallback_index;
+    }
+  }
+
+  HttpResponse response;
+  response.status = 404;
+  response.body = "{\"error\":\"not_found\"}";
   return response;
 }
 

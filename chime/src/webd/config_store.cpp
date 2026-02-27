@@ -1,5 +1,7 @@
 #include "chime/webd_config_store.h"
 
+#include <algorithm>
+#include <cctype>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
@@ -23,7 +25,7 @@
 namespace chime::webd {
 namespace {
 
-constexpr mode_t kChimeConfigMode = 0644;
+constexpr mode_t kChimeConfigMode = 0600;
 constexpr mode_t kWpaConfigMode = 0600;
 
 bool ReadAllLines(const std::string& path, std::vector<std::string>* lines,
@@ -170,6 +172,33 @@ bool ParseInt(std::string_view text, int min_value, int max_value, int* output) 
   *output = static_cast<int>(parsed);
   return true;
 }
+
+bool ParseBool(std::string_view text, bool* output) {
+  if (output == nullptr) {
+    return false;
+  }
+  std::string normalized = vc::config::trim(text);
+  if (normalized.empty()) {
+    return false;
+  }
+  std::transform(normalized.begin(), normalized.end(), normalized.begin(),
+                 [](unsigned char c) {
+                   return static_cast<char>(std::tolower(c));
+                 });
+  if (normalized == "true" || normalized == "yes" || normalized == "1" ||
+      normalized == "on") {
+    *output = true;
+    return true;
+  }
+  if (normalized == "false" || normalized == "no" || normalized == "0" ||
+      normalized == "off") {
+    *output = false;
+    return true;
+  }
+  return false;
+}
+
+std::string BoolToConfig(bool value) { return value ? "true" : "false"; }
 
 std::string StripQuotes(std::string_view value) {
   const std::string trimmed = vc::config::trim(value);
@@ -325,7 +354,7 @@ SaveResult ConfigStore::SaveCoreConfig(const SaveRequest& request) {
     return result;
   }
 
-  if (!SaveChimeConfig(request.config, &error)) {
+  if (!SaveChimeConfig(request, existing.snapshot, &error)) {
     result.error = error;
     return result;
   }
@@ -373,6 +402,37 @@ std::vector<ValidationError> ConfigStore::ValidateRequest(
     errors.push_back({"mqtt_client_id", "mqtt_client_id must be <= 128 chars"});
   }
 
+  if (request.config.mqtt_username.size() > 128) {
+    errors.push_back({"mqtt_username", "mqtt_username must be <= 128 chars"});
+  }
+
+  if (request.config.mqtt_username.empty() && request.mqtt_password.has_value() &&
+      !request.mqtt_password->empty()) {
+    errors.push_back(
+        {"mqtt_password", "mqtt_password requires mqtt_username to be set"});
+  }
+
+  if (request.mqtt_password.has_value() && request.mqtt_password->size() > 256) {
+    errors.push_back({"mqtt_password", "mqtt_password must be <= 256 chars"});
+  }
+
+  if (request.config.mqtt_tls_ca_file.size() > 256) {
+    errors.push_back({"mqtt_tls_ca_file", "mqtt_tls_ca_file must be <= 256 chars"});
+  }
+  if (request.config.mqtt_tls_cert_file.size() > 256) {
+    errors.push_back(
+        {"mqtt_tls_cert_file", "mqtt_tls_cert_file must be <= 256 chars"});
+  }
+  if (request.config.mqtt_tls_key_file.size() > 256) {
+    errors.push_back({"mqtt_tls_key_file", "mqtt_tls_key_file must be <= 256 chars"});
+  }
+  const bool tls_cert_set = !request.config.mqtt_tls_cert_file.empty();
+  const bool tls_key_set = !request.config.mqtt_tls_key_file.empty();
+  if (tls_cert_set != tls_key_set) {
+    errors.push_back({"mqtt_tls_cert_file",
+                      "mqtt_tls_cert_file and mqtt_tls_key_file must both be set"});
+  }
+
   if (request.config.mqtt_topics.empty()) {
     errors.push_back({"mqtt_topics", "mqtt_topics must contain at least one topic"});
   } else {
@@ -415,6 +475,26 @@ SaveResult ConfigStore::LoadCoreConfigInternal() const {
   const std::string client_id = ExtractConfigValue(chime_lines, "mqtt_client_id");
   config.mqtt_client_id = client_id.empty() ? defaults.client_id : client_id;
 
+  config.mqtt_username = ExtractConfigValue(chime_lines, "mqtt_username");
+  config.mqtt_password = ExtractConfigValue(chime_lines, "mqtt_password");
+
+  const std::string tls_enabled_raw =
+      ExtractConfigValue(chime_lines, "mqtt_tls_enabled");
+  bool tls_enabled = defaults.mqtt_tls_enabled;
+  ParseBool(tls_enabled_raw, &tls_enabled);
+  config.mqtt_tls_enabled = tls_enabled;
+
+  const std::string tls_validate_raw =
+      ExtractConfigValue(chime_lines, "mqtt_tls_validate_certificate");
+  bool tls_validate = defaults.mqtt_tls_validate_certificate;
+  ParseBool(tls_validate_raw, &tls_validate);
+  config.mqtt_tls_validate_certificate = tls_validate;
+
+  config.mqtt_tls_ca_file = ExtractConfigValue(chime_lines, "mqtt_tls_ca_file");
+  config.mqtt_tls_cert_file =
+      ExtractConfigValue(chime_lines, "mqtt_tls_cert_file");
+  config.mqtt_tls_key_file = ExtractConfigValue(chime_lines, "mqtt_tls_key_file");
+
   const std::string topics_csv = ExtractConfigValue(chime_lines, "mqtt_topics");
   config.mqtt_topics = vc::config::split_csv(topics_csv);
 
@@ -432,22 +512,48 @@ SaveResult ConfigStore::LoadCoreConfigInternal() const {
 
   result.snapshot.config = std::move(config);
   result.snapshot.wifi_password_set = !wpa_data.psk.empty();
+  result.snapshot.mqtt_password_set = !result.snapshot.config.mqtt_password.empty();
   result.success = true;
   return result;
 }
 
-bool ConfigStore::SaveChimeConfig(const CoreConfig& config, std::string* error) const {
+bool ConfigStore::SaveChimeConfig(const SaveRequest& request,
+                                  const CoreConfigSnapshot& existing,
+                                  std::string* error) const {
   std::vector<std::string> lines;
   if (!ReadAllLines(chime_config_path_, &lines, error)) {
     return false;
   }
 
+  std::string mqtt_password = existing.config.mqtt_password;
+  if (request.config.mqtt_username.empty()) {
+    mqtt_password.clear();
+  } else if (request.mqtt_password.has_value()) {
+    if (request.mqtt_password->empty()) {
+      if (request.config.mqtt_username != existing.config.mqtt_username) {
+        mqtt_password.clear();
+      }
+    } else {
+      mqtt_password = *request.mqtt_password;
+    }
+  } else if (request.config.mqtt_username != existing.config.mqtt_username) {
+    mqtt_password.clear();
+  }
+
   const std::map<std::string, std::string> replacements = {
-      {"mqtt_host", config.mqtt_host},
-      {"mqtt_port", std::to_string(config.mqtt_port)},
-      {"mqtt_client_id", config.mqtt_client_id},
-      {"mqtt_topics", JoinCsv(config.mqtt_topics)},
-      {"ring_topic", config.ring_topic},
+      {"mqtt_host", request.config.mqtt_host},
+      {"mqtt_port", std::to_string(request.config.mqtt_port)},
+      {"mqtt_client_id", request.config.mqtt_client_id},
+      {"mqtt_username", request.config.mqtt_username},
+      {"mqtt_password", mqtt_password},
+      {"mqtt_tls_enabled", BoolToConfig(request.config.mqtt_tls_enabled)},
+      {"mqtt_tls_validate_certificate",
+       BoolToConfig(request.config.mqtt_tls_validate_certificate)},
+      {"mqtt_tls_ca_file", request.config.mqtt_tls_ca_file},
+      {"mqtt_tls_cert_file", request.config.mqtt_tls_cert_file},
+      {"mqtt_tls_key_file", request.config.mqtt_tls_key_file},
+      {"mqtt_topics", JoinCsv(request.config.mqtt_topics)},
+      {"ring_topic", request.config.ring_topic},
   };
 
   std::set<std::string> seen;

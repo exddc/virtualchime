@@ -45,6 +45,18 @@ int ChimeService::Run(vc::runtime::SignalHandler& signal_handler) {
 
   logger_.Info("mqtt", "broker=" + config_.host + ":" + std::to_string(config_.port) +
                            " client_id=" + config_.client_id);
+  logger_.Info(
+      "mqtt", "auth username=" +
+                  (config_.mqtt_username.empty() ? "<none>" : config_.mqtt_username) +
+                  " password_set=" +
+                  vc::util::BoolToString(!config_.mqtt_password.empty()));
+  logger_.Info(
+      "mqtt", "tls enabled=" + vc::util::BoolToString(config_.mqtt_tls_enabled) +
+                  " validate_cert=" +
+                  vc::util::BoolToString(config_.mqtt_tls_validate_certificate) +
+                  " ca_file=" +
+                  (config_.mqtt_tls_ca_file.empty() ? "<default/system>"
+                                                    : config_.mqtt_tls_ca_file));
   logger_.Info("mqtt", "subscribe topics=" + vc::util::Join(config_.topics, ",") +
                            " qos=" + std::to_string(config_.mqtt_subscribe_qos));
   logger_.Info("mqtt", "heartbeat interval=" +
@@ -65,6 +77,13 @@ int ChimeService::Run(vc::runtime::SignalHandler& signal_handler) {
 
   vc::mqtt::ConnectOptions options;
   options.client_id = config_.client_id;
+  options.username = config_.mqtt_username;
+  options.password = config_.mqtt_password;
+  options.tls_enabled = config_.mqtt_tls_enabled;
+  options.tls_validate_certificate = config_.mqtt_tls_validate_certificate;
+  options.tls_ca_file = config_.mqtt_tls_ca_file;
+  options.tls_cert_file = config_.mqtt_tls_cert_file;
+  options.tls_key_file = config_.mqtt_tls_key_file;
   options.keepalive_seconds = 60;
   options.reconnect_min_seconds = 2;
   options.reconnect_max_seconds = 10;

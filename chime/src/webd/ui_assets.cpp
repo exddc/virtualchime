@@ -51,6 +51,11 @@ const std::string& MainPageHtml() {
       font-size: 14px;
       background: #fff;
     }
+    input[type="checkbox"] {
+      width: auto;
+      padding: 0;
+      margin-top: 12px;
+    }
     button {
       border: none;
       background: var(--accent);
@@ -64,6 +69,10 @@ const std::string& MainPageHtml() {
     button.secondary {
       background: #334155;
     }
+    button:disabled {
+      opacity: 0.7;
+      cursor: default;
+    }
     .row { display: grid; gap: 12px; grid-template-columns: repeat(2, 1fr); }
     .message {
       margin-top: 10px;
@@ -74,11 +83,29 @@ const std::string& MainPageHtml() {
       color: #155e75;
       display: none;
       white-space: pre-wrap;
+      align-items: center;
+      gap: 8px;
     }
     .error {
       background: #fef2f2;
       border-color: #fecaca;
       color: var(--error);
+    }
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(21, 94, 117, 0.2);
+      border-top-color: #155e75;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex: 0 0 auto;
+    }
+    .error .spinner {
+      border: 2px solid rgba(185, 28, 28, 0.2);
+      border-top-color: var(--error);
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
     }
     .hint {
       margin-top: 8px;
@@ -137,10 +164,49 @@ const std::string& MainPageHtml() {
           <input id="mqtt_client_id" />
         </div>
         <div>
+          <label for="mqtt_username">Username</label>
+          <input id="mqtt_username" placeholder="Optional" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="mqtt_password">Password</label>
+          <input id="mqtt_password" type="password" placeholder="Leave blank to keep current" />
+        </div>
+        <div>
           <label for="ring_topic">Ring Topic</label>
           <input id="ring_topic" placeholder="doorbell/ring" />
         </div>
       </div>
+      <p id="mqtt_password_hint" class="hint">No MQTT password saved yet.</p>
+      <div class="row">
+        <div>
+          <label for="mqtt_tls_enabled">TLS Enabled</label>
+          <input id="mqtt_tls_enabled" type="checkbox" />
+        </div>
+        <div>
+          <label for="mqtt_tls_validate_certificate">Validate Certificate</label>
+          <input id="mqtt_tls_validate_certificate" type="checkbox" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="mqtt_tls_ca_file">CA File</label>
+          <input id="mqtt_tls_ca_file" placeholder="/etc/ssl/certs/ca.pem" />
+        </div>
+        <div>
+          <label for="mqtt_tls_cert_file">Client Cert File</label>
+          <input id="mqtt_tls_cert_file" placeholder="/etc/chime/client.crt" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="mqtt_tls_key_file">Client Key File</label>
+          <input id="mqtt_tls_key_file" placeholder="/etc/chime/client.key" />
+        </div>
+        <div></div>
+      </div>
+      <p class="hint">Client cert/key are optional, but must be provided together.</p>
       <label for="mqtt_topics">Subscribe Topics (comma-separated)</label>
       <input id="mqtt_topics" placeholder="doorbell/ring,doorbell/status" />
       <div style="margin-top: 12px;">
@@ -152,15 +218,28 @@ const std::string& MainPageHtml() {
 
   <script>
     const msg = document.getElementById('message');
+    const saveBtn = document.getElementById('save_btn');
+    const scanBtn = document.getElementById('scan_btn');
 
-    function setMessage(text, isError = false) {
-      msg.textContent = text;
-      msg.style.display = 'block';
+    function setMessage(text, isError = false, withSpinner = false) {
+      msg.textContent = '';
+      if (withSpinner) {
+        const spinner = document.createElement('span');
+        spinner.className = 'spinner';
+        msg.appendChild(spinner);
+      }
+      msg.appendChild(document.createTextNode(text));
+      msg.style.display = 'flex';
       if (isError) {
         msg.classList.add('error');
       } else {
         msg.classList.remove('error');
       }
+    }
+
+    function setSavingUi(isSaving) {
+      saveBtn.disabled = isSaving;
+      scanBtn.disabled = isSaving;
     }
 
     async function loadConfig() {
@@ -174,8 +253,18 @@ const std::string& MainPageHtml() {
       document.getElementById('mqtt_host').value = data.mqtt_host || '';
       document.getElementById('mqtt_port').value = data.mqtt_port || 1883;
       document.getElementById('mqtt_client_id').value = data.mqtt_client_id || 'chime';
+      document.getElementById('mqtt_username').value = data.mqtt_username || '';
+      document.getElementById('mqtt_tls_enabled').checked = !!data.mqtt_tls_enabled;
+      document.getElementById('mqtt_tls_validate_certificate').checked =
+        data.mqtt_tls_validate_certificate !== false;
+      document.getElementById('mqtt_tls_ca_file').value = data.mqtt_tls_ca_file || '';
+      document.getElementById('mqtt_tls_cert_file').value = data.mqtt_tls_cert_file || '';
+      document.getElementById('mqtt_tls_key_file').value = data.mqtt_tls_key_file || '';
       document.getElementById('ring_topic').value = data.ring_topic || 'doorbell/ring';
       document.getElementById('mqtt_topics').value = (data.mqtt_topics || []).join(',');
+      document.getElementById('mqtt_password_hint').textContent = data.mqtt_password_set
+        ? 'MQTT password is set. Leave blank to keep it unchanged.'
+        : 'No MQTT password saved yet.';
 
       const wifiHint = data.wifi_password_set
         ? 'Password is set. Leave blank to keep it unchanged.'
@@ -215,36 +304,104 @@ const std::string& MainPageHtml() {
         .filter((s) => s.length > 0);
     }
 
-    async function saveConfig() {
-      const payload = {
-        wifi_ssid: document.getElementById('wifi_ssid').value.trim(),
-        wifi_password: document.getElementById('wifi_password').value,
-        mqtt_host: document.getElementById('mqtt_host').value.trim(),
-        mqtt_port: Number(document.getElementById('mqtt_port').value),
-        mqtt_client_id: document.getElementById('mqtt_client_id').value.trim(),
-        mqtt_topics: parseTopics(document.getElementById('mqtt_topics').value),
-        ring_topic: document.getElementById('ring_topic').value.trim(),
-      };
+    function sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
 
-      const response = await fetch('/api/v1/config/core', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
+    async function loadApplyStatus() {
+      const response = await fetch('/api/v1/config/core');
       const data = await response.json();
-
       if (!response.ok) {
-        if (data.validation_errors) {
-          const details = data.validation_errors
-            .map((e) => `${e.field}: ${e.message}`)
-            .join('\n');
-          throw new Error(details);
+        throw new Error(data.error || 'Failed to load apply status');
+      }
+      return data.apply;
+    }
+
+    async function waitForApplyCompletion(jobId) {
+      const timeoutMs = 90000;
+      const pollMs = 800;
+      const startedAt = Date.now();
+      let transientErrors = 0;
+
+      while (Date.now() - startedAt < timeoutMs) {
+        try {
+          const apply = await loadApplyStatus();
+          if (apply && apply.job_id === jobId) {
+            if (apply.state === 'succeeded') {
+              return;
+            }
+            if (apply.state === 'failed') {
+              throw new Error(apply.error || 'Apply failed');
+            }
+          }
+        } catch (error) {
+          transientErrors += 1;
+          if (transientErrors >= 5) {
+            throw error;
+          }
         }
-        throw new Error(data.error || 'Save failed');
+        await sleep(pollMs);
       }
 
-      document.getElementById('wifi_password').value = '';
-      setMessage(`Saved. Apply job ${data.apply.job_id} is ${data.apply.state}.`);
+      throw new Error('Timed out waiting for apply to complete.');
+    }
+
+    async function saveConfig() {
+      setSavingUi(true);
+      setMessage('Saving and applying changes...', false, true);
+
+      try {
+        const payload = {
+          wifi_ssid: document.getElementById('wifi_ssid').value.trim(),
+          wifi_password: document.getElementById('wifi_password').value,
+          mqtt_host: document.getElementById('mqtt_host').value.trim(),
+          mqtt_port: Number(document.getElementById('mqtt_port').value),
+          mqtt_client_id: document.getElementById('mqtt_client_id').value.trim(),
+          mqtt_username: document.getElementById('mqtt_username').value.trim(),
+          mqtt_password: document.getElementById('mqtt_password').value,
+          mqtt_tls_enabled: document.getElementById('mqtt_tls_enabled').checked,
+          mqtt_tls_validate_certificate:
+            document.getElementById('mqtt_tls_validate_certificate').checked,
+          mqtt_tls_ca_file: document.getElementById('mqtt_tls_ca_file').value.trim(),
+          mqtt_tls_cert_file: document.getElementById('mqtt_tls_cert_file').value.trim(),
+          mqtt_tls_key_file: document.getElementById('mqtt_tls_key_file').value.trim(),
+          mqtt_topics: parseTopics(document.getElementById('mqtt_topics').value),
+          ring_topic: document.getElementById('ring_topic').value.trim(),
+        };
+
+        const response = await fetch('/api/v1/config/core', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          if (data.validation_errors) {
+            const details = data.validation_errors
+              .map((e) => `${e.field}: ${e.message}`)
+              .join('\n');
+            throw new Error(details);
+          }
+          throw new Error(data.error || 'Save failed');
+        }
+
+        document.getElementById('wifi_password').value = '';
+        document.getElementById('mqtt_password').value = '';
+        document.getElementById('mqtt_password_hint').textContent = data.mqtt_password_set
+          ? 'MQTT password is set. Leave blank to keep it unchanged.'
+          : 'No MQTT password saved yet.';
+
+        if (!data.apply || data.apply.state === 'succeeded') {
+          setMessage('Saved and applied.', false);
+          return;
+        }
+
+        await waitForApplyCompletion(data.apply.job_id);
+        setMessage('Saved and applied.', false);
+      } finally {
+        setSavingUi(false);
+      }
     }
 
     document.getElementById('scan_btn').addEventListener('click', async () => {

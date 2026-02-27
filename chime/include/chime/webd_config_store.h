@@ -25,7 +25,9 @@ class ConfigStore {
 
   SaveResult LoadCoreConfigInternal() const;
 
-  bool SaveChimeConfig(const CoreConfig& config, std::string* error) const;
+  bool SaveChimeConfig(const SaveRequest& request,
+                       const CoreConfigSnapshot& existing,
+                       std::string* error) const;
   bool SaveWpaSupplicant(const SaveRequest& request,
                          const CoreConfigSnapshot& existing,
                          std::string* error) const;

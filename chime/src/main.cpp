@@ -121,6 +121,20 @@ int main(int argc, char* argv[]) {
     logger.Info("mqtt", "client_id override from CHIME_MQTT_CLIENT_ID");
   }
 
+  const std::string mqtt_username_override =
+      vc::util::GetEnv("CHIME_MQTT_USERNAME");
+  if (!mqtt_username_override.empty()) {
+    result.config.mqtt_username = mqtt_username_override;
+    logger.Info("mqtt", "username override from CHIME_MQTT_USERNAME");
+  }
+
+  const std::string mqtt_password_override =
+      vc::util::GetEnv("CHIME_MQTT_PASSWORD");
+  if (!mqtt_password_override.empty()) {
+    result.config.mqtt_password = mqtt_password_override;
+    logger.Info("mqtt", "password override from CHIME_MQTT_PASSWORD");
+  }
+
   logger.Info("chime", "loaded config from " + config_path);
 
   chime::AplayAudioPlayer audio_player(logger);

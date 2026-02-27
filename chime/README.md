@@ -25,6 +25,9 @@ Operational runbook: `RELIABILITY_RUNBOOK.md`.
 - Uses self-signed TLS cert/key at:
   - `/etc/chime-web/tls/cert.pem`
   - `/etc/chime-web/tls/key.pem`
+- Optional static UI override:
+  - Set `CHIME_WEBD_UI_DIST_DIR` to serve built web assets (for example Svelte
+    `dist/`) instead of the embedded fallback UI.
 - Runs as a separate process from `chime` for ring-path reliability isolation.
 
 ## Reliability Logging
@@ -45,6 +48,9 @@ See `/etc/chime.conf` for defaults.
 
 Daemon keys:
 - `mqtt_host`, `mqtt_port`, `mqtt_client_id`
+- `mqtt_username`, `mqtt_password` (optional broker auth)
+- `mqtt_tls_enabled`, `mqtt_tls_validate_certificate`
+- `mqtt_tls_ca_file`, `mqtt_tls_cert_file`, `mqtt_tls_key_file`
 - `mqtt_topics` (comma-separated)
 - `mqtt_subscribe_qos` (0-2)
 - `heartbeat_interval` (0 disables)
