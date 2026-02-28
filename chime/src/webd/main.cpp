@@ -24,6 +24,7 @@ constexpr const char *kChimeConfigPath = "/etc/chime.conf";
 constexpr const char *kWpaSupplicantPath = "/etc/wpa_supplicant/wpa_supplicant.conf";
 constexpr const char *kTlsCertPath = "/etc/chime-web/tls/cert.pem";
 constexpr const char *kTlsKeyPath = "/etc/chime-web/tls/key.pem";
+constexpr const char *kUiDistDir = "/usr/local/share/chime-web-ui/dist";
 constexpr const char *kBindAddress = "0.0.0.0";
 constexpr int kListenPort = 8443;
 constexpr const char *kHostLabel = "chime";
@@ -144,7 +145,7 @@ int main(int argc, char *argv[]) {
     const std::string wpa_supplicant_path = EnvOrDefault("CHIME_WEBD_WPA_SUPPLICANT", kWpaSupplicantPath);
     const std::string tls_cert_path = EnvOrDefault("CHIME_WEBD_TLS_CERT", kTlsCertPath);
     const std::string tls_key_path = EnvOrDefault("CHIME_WEBD_TLS_KEY", kTlsKeyPath);
-    const std::string ui_dist_dir = vc::util::GetEnv("CHIME_WEBD_UI_DIST_DIR");
+    const std::string ui_dist_dir = EnvOrDefault("CHIME_WEBD_UI_DIST_DIR", kUiDistDir);
     const std::string observed_topics_path = EnvOrDefault("CHIME_WEBD_OBSERVED_TOPICS_PATH", kObservedTopicsPath);
     const std::string ring_sounds_dir = EnvOrDefault("CHIME_WEBD_RING_SOUNDS_DIR", kRingSoundsDir);
     const std::string active_ring_sound_path = EnvOrDefault("CHIME_WEBD_ACTIVE_RING_SOUND", kActiveRingSoundPath);

@@ -45,6 +45,7 @@ namespace {
 
 constexpr std::size_t kMaxRequestBytes = 65536;
 constexpr std::size_t kMaxBodyBytes = 2 * 1024 * 1024;
+constexpr const char *kDefaultRingSoundName = "ring-default.wav";
 
 bool StartsWith(const std::string &value, const std::string &prefix) {
     return value.size() >= prefix.size() && value.compare(0, prefix.size(), prefix) == 0;
@@ -124,6 +125,53 @@ bool EnsureDirectoryExists(const std::string &path, std::string *error) {
 
     (void)created;
     return true;
+}
+
+void TrySeedDefaultRingSound(const std::string &ring_sounds_dir, const std::string &active_ring_sound_path,
+                             vc::logging::Logger &logger) {
+    std::error_code ec;
+    const std::filesystem::path source_path(active_ring_sound_path);
+    const std::filesystem::path target_path = std::filesystem::path(ring_sounds_dir) / kDefaultRingSoundName;
+    const std::filesystem::path temp_path = target_path.string() + ".tmp";
+
+    if (!std::filesystem::exists(source_path, ec)) {
+        return;
+    }
+    if (ec) {
+        logger.Warn("webd", "failed to inspect active ring sound: " + source_path.string() + " error=" + ec.message());
+        return;
+    }
+    if (!std::filesystem::is_regular_file(source_path, ec)) {
+        return;
+    }
+    if (ec) {
+        logger.Warn("webd", "failed to inspect active ring sound: " + source_path.string() + " error=" + ec.message());
+        return;
+    }
+
+    if (std::filesystem::exists(target_path, ec)) {
+        return;
+    }
+    if (ec) {
+        logger.Warn("webd", "failed to inspect default ring sound target: " + target_path.string() + " error=" +
+                                ec.message());
+        return;
+    }
+
+    std::filesystem::copy_file(source_path, temp_path, std::filesystem::copy_options::overwrite_existing, ec);
+    if (ec) {
+        logger.Warn("webd", "failed to seed default ring sound: copy " + source_path.string() + " -> " +
+                                temp_path.string() + " error=" + ec.message());
+        return;
+    }
+
+    std::filesystem::rename(temp_path, target_path, ec);
+    if (ec) {
+        std::error_code remove_ec;
+        std::filesystem::remove(temp_path, remove_ec);
+        logger.Warn("webd", "failed to seed default ring sound: rename " + temp_path.string() + " -> " +
+                                target_path.string() + " error=" + ec.message());
+    }
 }
 
 std::string ContentTypeForPath(const std::filesystem::path &path) {
@@ -1106,6 +1154,8 @@ WebServer::HttpResponse WebServer::HandleGetRingSounds() {
         response.body = "{\"error\":\"ring_sounds_unavailable\",\"message\":" + JsonString(ensure_error) + "}";
         return response;
     }
+
+    TrySeedDefaultRingSound(ring_sounds_dir_, active_ring_sound_path_, logger_);
 
     const std::string selected_path = ring_sounds_dir_ + "/selected.txt";
     std::string selected_name;

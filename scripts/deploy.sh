@@ -9,6 +9,7 @@ VOLUME_NAME="virtualchime-buildroot-cache"
 OUTPUT_DIR="$PROJECT_DIR/buildroot/output"
 APP_VERSION_FILE="$PROJECT_DIR/chime/VERSION"
 CONFIG_FILE="$PROJECT_DIR/buildroot/board/raspberrypi0w/rootfs_overlay/etc/chime.conf"
+WEBUI_DIST_DIR="$PROJECT_DIR/webui/dist"
 CHIME_BINARY="$OUTPUT_DIR/chime"
 WEBD_BINARY="$OUTPUT_DIR/chime-webd"
 BUILDROOT_VERSION="${BUILDROOT_VERSION:-2024.02.1}"
@@ -18,6 +19,10 @@ SSH_USER="root"
 SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=10"
 REMOTE_BINARY_PATH="/usr/local/bin/chime"
 REMOTE_WEBD_BINARY_PATH="/usr/local/bin/chime-webd"
+REMOTE_BINARY_STAGING_PATH="/usr/local/bin/.chime.new"
+REMOTE_WEBD_BINARY_STAGING_PATH="/usr/local/bin/.chime-webd.new"
+REMOTE_WEBD_UI_ROOT="/usr/local/share/chime-web-ui"
+REMOTE_WEBD_UI_DIST_PATH="$REMOTE_WEBD_UI_ROOT/dist"
 REMOTE_CONFIG_PATH="/etc/chime.conf"
 
 log() { echo "[deploy] $*"; }
@@ -154,10 +159,9 @@ deploy_binary_to_pi() {
     log "Stopping chime service..."
     ssh $SSH_OPTS "$SSH_USER@$host" "/etc/init.d/S99chime stop" || true
 
-    log "Copying binary..."
-    scp -O $SSH_OPTS "$binary_path" "$SSH_USER@$host:$REMOTE_BINARY_PATH"
-
-    ssh $SSH_OPTS "$SSH_USER@$host" "chmod +x $REMOTE_BINARY_PATH"
+    log "Copying binary (atomic replace)..."
+    scp -O $SSH_OPTS "$binary_path" "$SSH_USER@$host:$REMOTE_BINARY_STAGING_PATH"
+    ssh $SSH_OPTS "$SSH_USER@$host" "chmod +x $REMOTE_BINARY_STAGING_PATH && mv -f $REMOTE_BINARY_STAGING_PATH $REMOTE_BINARY_PATH"
     ssh $SSH_OPTS "$SSH_USER@$host" "printf '%s\n' '$app_version' > /etc/chime-app-version"
 
     log "Starting chime service..."
@@ -181,10 +185,19 @@ deploy_webd_to_pi() {
     log "Stopping web service..."
     ssh $SSH_OPTS "$SSH_USER@$host" "/etc/init.d/S45webd stop" || true
 
-    log "Copying web binary..."
-    scp -O $SSH_OPTS "$binary_path" "$SSH_USER@$host:$REMOTE_WEBD_BINARY_PATH"
+    log "Copying web binary (atomic replace)..."
+    scp -O $SSH_OPTS "$binary_path" "$SSH_USER@$host:$REMOTE_WEBD_BINARY_STAGING_PATH"
+    ssh $SSH_OPTS "$SSH_USER@$host" "chmod +x $REMOTE_WEBD_BINARY_STAGING_PATH && mv -f $REMOTE_WEBD_BINARY_STAGING_PATH $REMOTE_WEBD_BINARY_PATH"
 
-    ssh $SSH_OPTS "$SSH_USER@$host" "chmod +x $REMOTE_WEBD_BINARY_PATH"
+    if [ -d "$WEBUI_DIST_DIR" ]; then
+        log "Deploying web UI assets from $WEBUI_DIST_DIR..."
+        ssh $SSH_OPTS "$SSH_USER@$host" "mkdir -p $REMOTE_WEBD_UI_ROOT"
+        scp -O -r $SSH_OPTS "$WEBUI_DIST_DIR" "$SSH_USER@$host:$REMOTE_WEBD_UI_ROOT"
+        ssh $SSH_OPTS "$SSH_USER@$host" "ls -la $REMOTE_WEBD_UI_DIST_PATH >/dev/null"
+    else
+        log "WARNING: $WEBUI_DIST_DIR not found; webd will serve fallback page."
+        log "Build UI assets first with: ./scripts/local_chime.sh webui-build"
+    fi
 
     log "Starting web service..."
     ssh $SSH_OPTS "$SSH_USER@$host" "/etc/init.d/S45webd start"

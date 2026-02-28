@@ -56,6 +56,7 @@ CHIME_WEBD_SOURCES = \
 	chime/src/webd/config_store.cpp \
 	chime/src/webd/json.cpp \
 	chime/src/webd/mdns.cpp \
+	chime/src/webd/string_utils.cpp \
 	chime/src/webd/ui_assets.cpp \
 	chime/src/webd/web_server.cpp \
 	chime/src/webd/wifi_scan.cpp
