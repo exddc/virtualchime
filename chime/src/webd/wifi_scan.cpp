@@ -21,6 +21,7 @@
 #include <unistd.h>
 
 #include "vc/config/kv_config.h"
+#include "chime/webd_string_utils.h"
 #include "vc/logging/logger.h"
 
 namespace chime::webd {
@@ -212,12 +213,6 @@ std::vector<std::string> SplitTabs(const std::string& input) {
   }
   fields.push_back(current);
   return fields;
-}
-
-std::string ToLower(std::string value) {
-  std::transform(value.begin(), value.end(), value.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  return value;
 }
 
 std::string OneLineOutput(std::string output, std::size_t max_chars) {

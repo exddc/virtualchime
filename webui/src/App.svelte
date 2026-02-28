@@ -81,6 +81,7 @@
   let ringSounds: string[] = [];
   let selectedRingSound = "";
   let ringSoundUpload: File | null = null;
+  let preparedUploadName = "";
   let isUploadingRingSound = false;
 
   let scanResults: WifiNetwork[] = [];
@@ -210,19 +211,46 @@
     selectedRingSound = data.selected_sound ?? "";
   }
 
+
+  function buildUploadSoundName(originalName: string): string {
+    const lower = originalName.toLowerCase();
+    const normalized = lower
+      .replace(/[^a-z0-9_.-]+/g, "-")
+      .replace(/[-._]{2,}/g, "-")
+      .replace(/^[._-]+/, "")
+      .replace(/[._-]+$/, "");
+
+    const withExtension = normalized.endsWith(".wav")
+      ? normalized
+      : `${normalized}.wav`;
+
+    const withoutPrefix = withExtension.replace(/^ring-/, "");
+    const candidate = `ring-${withoutPrefix}`;
+
+    const cleaned = candidate
+      .replace(/[^a-z0-9_.-]+/g, "-")
+      .replace(/[-._]{2,}/g, "-")
+      .replace(/^[-._]+/, "")
+      .replace(/[-._]+$/, "");
+
+    if (!cleaned || cleaned === "ring" || cleaned === "ring.wav") {
+      return "ring-custom.wav";
+    }
+
+    if (!cleaned.endsWith(".wav")) {
+      return `${cleaned}.wav`;
+    }
+
+    return cleaned;
+  }
+
   async function uploadRingSound(): Promise<void> {
     if (!ringSoundUpload) {
       throw new Error("Choose a .wav file to upload.");
     }
 
-    const sanitizedName =
-      ringSoundUpload.name
-        .toLowerCase()
-        .replace(/[^a-z0-9_.-]/g, "-")
-        .replace(/^[.-]+/, "") || "ring-custom.wav";
-    const uploadName = sanitizedName.startsWith("ring-")
-      ? sanitizedName
-      : `ring-${sanitizedName}`;
+    const uploadName = buildUploadSoundName(ringSoundUpload.name);
+    preparedUploadName = uploadName;
 
     isUploadingRingSound = true;
     try {
@@ -254,10 +282,22 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: selectedRingSound }),
     });
-    const data = (await response.json()) as { error?: string; message?: string };
+    const data = (await response.json()) as {
+      error?: string;
+      message?: string;
+      selection_persisted?: boolean;
+    };
 
     if (!response.ok) {
       throw new Error(data.message ?? data.error ?? "Failed to activate sound");
+    }
+
+    if (data.selection_persisted === false) {
+      setMessage(
+        "Ring sound activated, but selected-sound metadata could not be persisted.",
+        true,
+      );
+      return;
     }
 
     setMessage("Ring sound updated. New rings use this sound immediately.", false);
@@ -330,8 +370,7 @@
   onMount(() => {
     loadConfig()
       .then(async () => {
-        await loadObservedTopics();
-        await loadRingSounds();
+        await Promise.all([loadObservedTopics(), loadRingSounds()]);
       })
       .catch((error: unknown) => {
         const text = error instanceof Error ? error.message : String(error);
@@ -408,6 +447,7 @@
           on:change={(event) => {
             const target = event.currentTarget as HTMLInputElement;
             ringSoundUpload = target.files && target.files.length > 0 ? target.files[0] : null;
+            preparedUploadName = ringSoundUpload ? buildUploadSoundName(ringSoundUpload.name) : "";
           }}
         />
       </div>
@@ -421,6 +461,9 @@
         </select>
       </div>
     </div>
+    {#if preparedUploadName}
+      <p class="hint">Upload filename: <code>{preparedUploadName}</code></p>
+    {/if}
     <div class="button-row">
       <button
         class="secondary"
@@ -438,6 +481,7 @@
       </button>
       <button
         type="button"
+        disabled={isUploadingRingSound}
         on:click={async () => {
           try {
             await activateRingSound();

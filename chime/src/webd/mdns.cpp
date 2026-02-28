@@ -18,6 +18,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
+#include "chime/webd_string_utils.h"
 #include "vc/logging/logger.h"
 
 namespace chime::webd {
@@ -27,12 +28,6 @@ constexpr uint16_t kMdnsPort = 5353;
 constexpr const char* kMdnsGroup = "224.0.0.251";
 constexpr uint32_t kDnsTypeA = 1;
 constexpr uint32_t kDnsTypeAny = 255;
-
-std::string ToLower(std::string text) {
-  std::transform(text.begin(), text.end(), text.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  return text;
-}
 
 bool GetInterfaceIPv4(const std::string& interface_name, struct in_addr* address,
                       std::string* error) {

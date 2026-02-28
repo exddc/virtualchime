@@ -32,6 +32,7 @@
 #include "chime/webd_apply_manager.h"
 #include "chime/webd_config_store.h"
 #include "chime/webd_json.h"
+#include "chime/webd_string_utils.h"
 #include "chime/webd_ui_assets.h"
 #include "chime/webd_wifi_scan.h"
 #include "vc/config/kv_config.h"
@@ -46,12 +47,6 @@ constexpr std::size_t kMaxBodyBytes = 2 * 1024 * 1024;
 bool StartsWith(const std::string& value, const std::string& prefix) {
   return value.size() >= prefix.size() &&
          value.compare(0, prefix.size(), prefix) == 0;
-}
-
-std::string ToLower(std::string value) {
-  std::transform(value.begin(), value.end(), value.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  return value;
 }
 
 bool IsSafeRelativePath(const std::filesystem::path& path) {
@@ -90,8 +85,23 @@ bool IsSafeSoundName(const std::string& file_name) {
 
 bool EnsureDirectoryExists(const std::string& path, std::string* error) {
   std::error_code ec;
-  if (std::filesystem::exists(path, ec)) {
-    if (!std::filesystem::is_directory(path, ec)) {
+  const bool exists = std::filesystem::exists(path, ec);
+  if (ec) {
+    if (error != nullptr) {
+      *error = "exists(" + path + ") failed: " + ec.message();
+    }
+    return false;
+  }
+
+  if (exists) {
+    const bool is_directory = std::filesystem::is_directory(path, ec);
+    if (ec) {
+      if (error != nullptr) {
+        *error = "is_directory(" + path + ") failed: " + ec.message();
+      }
+      return false;
+    }
+    if (!is_directory) {
       if (error != nullptr) {
         *error = "path exists but is not a directory: " + path;
       }
@@ -101,8 +111,21 @@ bool EnsureDirectoryExists(const std::string& path, std::string* error) {
   }
 
   if (!std::filesystem::create_directories(path, ec)) {
+    if (ec) {
+      if (error != nullptr) {
+        *error = "create_directories(" + path + ") failed: " + ec.message();
+      }
+      return false;
+    }
     if (error != nullptr) {
       *error = "failed to create directory: " + path;
+    }
+    return false;
+  }
+
+  if (ec) {
+    if (error != nullptr) {
+      *error = "create_directories(" + path + ") failed: " + ec.message();
     }
     return false;
   }
@@ -1243,8 +1266,10 @@ WebServer::HttpResponse WebServer::HandleUploadRingSound(const HttpRequest& requ
 
   const std::filesystem::path sound_path =
       std::filesystem::path(ring_sounds_dir_) / sound_name;
+  const std::filesystem::path temp_path = sound_path.string() + ".tmp";
+
   {
-    std::ofstream output(sound_path, std::ios::binary | std::ios::trunc);
+    std::ofstream output(temp_path, std::ios::binary | std::ios::trunc);
     if (!output.is_open()) {
       response.status = 500;
       response.body =
@@ -1252,12 +1277,27 @@ WebServer::HttpResponse WebServer::HandleUploadRingSound(const HttpRequest& requ
       return response;
     }
     output.write(request.body.data(), static_cast<std::streamsize>(request.body.size()));
+    output.flush();
     if (!output.good()) {
+      output.close();
+      std::error_code remove_ec;
+      std::filesystem::remove(temp_path, remove_ec);
       response.status = 500;
       response.body =
           "{\"error\":\"save_failed\",\"message\":\"failed to write destination\"}";
       return response;
     }
+  }
+
+  std::error_code rename_ec;
+  std::filesystem::rename(temp_path, sound_path, rename_ec);
+  if (rename_ec) {
+    std::error_code remove_ec;
+    std::filesystem::remove(temp_path, remove_ec);
+    response.status = 500;
+    response.body =
+        "{\"error\":\"save_failed\",\"message\":\"failed to move destination\"}";
+    return response;
   }
 
   response.status = 200;
@@ -1325,16 +1365,29 @@ WebServer::HttpResponse WebServer::HandleSelectRingSound(const HttpRequest& requ
     return response;
   }
 
+  bool selection_persisted = true;
   {
-    std::ofstream selected_file(ring_sounds_dir_ + "/selected.txt",
-                                std::ios::out | std::ios::trunc);
-    if (selected_file.is_open()) {
+    const std::string selected_path = ring_sounds_dir_ + "/selected.txt";
+    std::ofstream selected_file(selected_path, std::ios::out | std::ios::trunc);
+    if (!selected_file.is_open()) {
+      selection_persisted = false;
+      logger_.Warn("webd", "failed to open selected file for write: " + selected_path +
+                              " error=" + std::strerror(errno));
+    } else {
       selected_file << *sound_name << "\n";
+      selected_file.flush();
+      if (!selected_file.good()) {
+        selection_persisted = false;
+        logger_.Warn("webd", "failed to write selected file: " + selected_path +
+                                " error=" + std::strerror(errno));
+      }
     }
   }
 
   response.status = 200;
-  response.body = "{\"selected\":" + JsonString(*sound_name) + "}";
+  response.body = "{\"selected\":" + JsonString(*sound_name) + ",";
+  response.body += "\"selection_persisted\":" + JsonBool(selection_persisted);
+  response.body += "}";
   return response;
 }
 

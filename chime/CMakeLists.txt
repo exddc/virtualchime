@@ -40,6 +40,7 @@ add_library(
   src/webd/config_store.cpp
   src/webd/json.cpp
   src/webd/mdns.cpp
+  src/webd/string_utils.cpp
   src/webd/ui_assets.cpp
   src/webd/web_server.cpp
   src/webd/wifi_scan.cpp)
