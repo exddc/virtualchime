@@ -52,18 +52,33 @@ jobs:
       - name: Determine CI file scope
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
-            echo "CHIME_CI_SCOPE=changed" >> "$GITHUB_ENV"
-            echo "CHIME_CI_BASE_REF=origin/${{ github.base_ref }}" >> "$GITHUB_ENV"
+            base_sha="${{ github.event.pull_request.base.sha }}"
+            if ! git cat-file -e "${base_sha}^{commit}" 2>/dev/null; then
+              git fetch --no-tags --depth=1 origin "${base_sha}" || true
+            fi
+            if git cat-file -e "${base_sha}^{commit}" 2>/dev/null; then
+              echo "CHIME_CI_SCOPE=changed" >> "$GITHUB_ENV"
+              echo "CHIME_CI_BASE_REF=${base_sha}" >> "$GITHUB_ENV"
+            else
+              echo "CHIME_CI_SCOPE=all" >> "$GITHUB_ENV"
+              echo "CHIME_CI_BASE_REF=" >> "$GITHUB_ENV"
+            fi
           elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
-            echo "CHIME_CI_SCOPE=changed" >> "$GITHUB_ENV"
-            echo "CHIME_CI_BASE_REF=${{ github.event.before }}" >> "$GITHUB_ENV"
+            before_sha="${{ github.event.before }}"
+            if git cat-file -e "${before_sha}^{commit}" 2>/dev/null; then
+              echo "CHIME_CI_SCOPE=changed" >> "$GITHUB_ENV"
+              echo "CHIME_CI_BASE_REF=${before_sha}" >> "$GITHUB_ENV"
+            else
+              echo "CHIME_CI_SCOPE=all" >> "$GITHUB_ENV"
+              echo "CHIME_CI_BASE_REF=" >> "$GITHUB_ENV"
+            fi
           else
             echo "CHIME_CI_SCOPE=all" >> "$GITHUB_ENV"
+            echo "CHIME_CI_BASE_REF=" >> "$GITHUB_ENV"
           fi
 
       - name: Run chime CI checks
         env:
           BUILD_TYPE: ${{ matrix.build_type }}
         run: |
-          ./scripts/chime_ci.sh
+          bash ./scripts/chime_ci.sh
