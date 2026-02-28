@@ -153,20 +153,20 @@ collect_candidates() {
 
 collect_format_files() {
   local file
-  while IFS= read -r -d '' file; do
+  collect_candidates | while IFS= read -r -d '' file; do
     if is_chime_format_file "$file" && [ -f "$PROJECT_DIR/$file" ]; then
       printf '%s\0' "$file"
     fi
-  done < <(collect_candidates)
+  done
 }
 
 collect_tidy_files() {
   local file
-  while IFS= read -r -d '' file; do
+  collect_candidates | while IFS= read -r -d '' file; do
     if is_chime_tidy_file "$file" && [ -f "$PROJECT_DIR/$file" ]; then
       printf '%s\0' "$file"
     fi
-  done < <(collect_candidates)
+  done
 }
 
 run_clang_format() {
@@ -178,9 +178,16 @@ run_clang_format() {
   require_tool clang-format
 
   local files=()
+  local file_list
+  file_list="$(mktemp)"
+  if ! collect_format_files > "$file_list"; then
+    rm -f "$file_list"
+    return 1
+  fi
   while IFS= read -r -d '' file; do
     files+=("$file")
-  done < <(collect_format_files)
+  done < "$file_list"
+  rm -f "$file_list"
 
   if [ "${#files[@]}" -eq 0 ]; then
     log "No chime C/C++ files found for clang-format"
@@ -219,9 +226,16 @@ run_clang_tidy() {
   require_tool clang-tidy
 
   local files=()
+  local file_list
+  file_list="$(mktemp)"
+  if ! collect_tidy_files > "$file_list"; then
+    rm -f "$file_list"
+    return 1
+  fi
   while IFS= read -r -d '' file; do
     files+=("$file")
-  done < <(collect_tidy_files)
+  done < "$file_list"
+  rm -f "$file_list"
 
   if [ "${#files[@]}" -eq 0 ]; then
     log "No chime C++ sources found for clang-tidy"
@@ -249,6 +263,7 @@ main() {
 
   git -C "$PROJECT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || \
     error "Must run inside the repository"
+  cd "$PROJECT_DIR"
 
   run_clang_format
   if [ "$SKIP_TIDY" = "1" ] && [ "$SKIP_BUILD" = "1" ]; then
