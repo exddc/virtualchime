@@ -41,7 +41,7 @@ namespace chime::webd {
 namespace {
 
 constexpr std::size_t kMaxRequestBytes = 65536;
-constexpr std::size_t kMaxBodyBytes = 32768;
+constexpr std::size_t kMaxBodyBytes = 2 * 1024 * 1024;
 
 bool StartsWith(const std::string& value, const std::string& prefix) {
   return value.size() >= prefix.size() &&
@@ -60,6 +60,53 @@ bool IsSafeRelativePath(const std::filesystem::path& path) {
       return false;
     }
   }
+  return true;
+}
+
+bool IsSafeSoundName(const std::string& file_name) {
+  if (file_name.empty() || file_name.size() > 128) {
+    return false;
+  }
+  if (file_name.find('/') != std::string::npos ||
+      file_name.find('\\') != std::string::npos) {
+    return false;
+  }
+  if (file_name.find("..") != std::string::npos) {
+    return false;
+  }
+  const std::string lowered = ToLower(file_name);
+  if (!StartsWith(lowered, "ring-") ||
+      lowered.rfind(".wav") != lowered.size() - 4) {
+    return false;
+  }
+  for (const char c : file_name) {
+    if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '.' || c == '-' ||
+          c == '_')) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool EnsureDirectoryExists(const std::string& path, std::string* error) {
+  std::error_code ec;
+  if (std::filesystem::exists(path, ec)) {
+    if (!std::filesystem::is_directory(path, ec)) {
+      if (error != nullptr) {
+        *error = "path exists but is not a directory: " + path;
+      }
+      return false;
+    }
+    return true;
+  }
+
+  if (!std::filesystem::create_directories(path, ec)) {
+    if (error != nullptr) {
+      *error = "failed to create directory: " + path;
+    }
+    return false;
+  }
+
   return true;
 }
 
@@ -497,7 +544,9 @@ WebServer::WebServer(vc::logging::Logger& logger, ConfigStore& config_store,
                      WifiScanner& wifi_scanner, ApplyManager& apply_manager,
                      std::string bind_address, int port, std::string cert_path,
                      std::string key_path, std::string ui_dist_dir,
-                     std::string observed_topics_path)
+                     std::string observed_topics_path,
+                     std::string ring_sounds_dir,
+                     std::string active_ring_sound_path)
     : logger_(logger),
       config_store_(config_store),
       wifi_scanner_(wifi_scanner),
@@ -507,7 +556,9 @@ WebServer::WebServer(vc::logging::Logger& logger, ConfigStore& config_store,
       cert_path_(std::move(cert_path)),
       key_path_(std::move(key_path)),
       ui_dist_dir_(std::move(ui_dist_dir)),
-      observed_topics_path_(std::move(observed_topics_path)) {}
+      observed_topics_path_(std::move(observed_topics_path)),
+      ring_sounds_dir_(std::move(ring_sounds_dir)),
+      active_ring_sound_path_(std::move(active_ring_sound_path)) {}
 
 WebServer::~WebServer() { Stop(); }
 
@@ -828,6 +879,36 @@ WebServer::HttpResponse WebServer::Route(const HttpRequest& request) {
     return HandleGetObservedTopics();
   }
 
+  if (request.path == "/api/v1/ring/sounds") {
+    if (request.method == "GET") {
+      return HandleGetRingSounds();
+    }
+    HttpResponse response;
+    response.status = 405;
+    response.body = "{\"error\":\"method_not_allowed\"}";
+    return response;
+  }
+
+  if (request.path.rfind("/api/v1/ring/sounds/", 0) == 0) {
+    if (request.path == "/api/v1/ring/sounds/select") {
+      if (request.method != "POST") {
+        HttpResponse response;
+        response.status = 405;
+        response.body = "{\"error\":\"method_not_allowed\"}";
+        return response;
+      }
+      return HandleSelectRingSound(request);
+    }
+
+    if (request.method != "PUT") {
+      HttpResponse response;
+      response.status = 405;
+      response.body = "{\"error\":\"method_not_allowed\"}";
+      return response;
+    }
+    return HandleUploadRingSound(request);
+  }
+
   if (request.path == "/api/v1/system" || request.path == "/api/v1/device" ||
       request.path == "/api/v1/diagnostics" ||
       request.path.rfind("/api/v1/system/", 0) == 0 ||
@@ -1079,6 +1160,181 @@ WebServer::HttpResponse WebServer::HandleGetObservedTopics() {
   response.body = "{";
   response.body += "\"topics\":" + SerializeTopics(topics);
   response.body += "}";
+  return response;
+}
+
+WebServer::HttpResponse WebServer::HandleGetRingSounds() {
+  HttpResponse response;
+
+  std::string ensure_error;
+  if (!EnsureDirectoryExists(ring_sounds_dir_, &ensure_error)) {
+    response.status = 500;
+    response.body = "{\"error\":\"ring_sounds_unavailable\",\"message\":" +
+                    JsonString(ensure_error) + "}";
+    return response;
+  }
+
+  std::string selected_name;
+  {
+    std::ifstream selected_file(ring_sounds_dir_ + "/selected.txt");
+    if (selected_file.is_open()) {
+      std::getline(selected_file, selected_name);
+      selected_name = vc::config::trim(selected_name);
+    }
+  }
+
+  std::vector<std::string> sounds;
+  std::error_code ec;
+  for (const auto& entry : std::filesystem::directory_iterator(ring_sounds_dir_, ec)) {
+    if (ec) {
+      break;
+    }
+    if (!entry.is_regular_file(ec)) {
+      continue;
+    }
+    const std::string name = entry.path().filename().string();
+    if (!IsSafeSoundName(name)) {
+      continue;
+    }
+    sounds.push_back(name);
+  }
+  std::sort(sounds.begin(), sounds.end());
+
+  response.status = 200;
+  response.body = "{";
+  response.body += "\"selected_sound\":" + JsonString(selected_name) + ",";
+  response.body += "\"sounds\":[";
+  for (std::size_t i = 0; i < sounds.size(); ++i) {
+    if (i > 0) {
+      response.body += ",";
+    }
+    response.body += JsonString(sounds[i]);
+  }
+  response.body += "]}";
+  return response;
+}
+
+WebServer::HttpResponse WebServer::HandleUploadRingSound(const HttpRequest& request) {
+  HttpResponse response;
+
+  const std::string prefix = "/api/v1/ring/sounds/";
+  const std::string sound_name = request.path.substr(prefix.size());
+  if (!IsSafeSoundName(sound_name)) {
+    response.status = 400;
+    response.body =
+        "{\"error\":\"invalid_sound_name\",\"message\":\"Use ring-*.wav\"}";
+    return response;
+  }
+
+  if (request.body.empty()) {
+    response.status = 400;
+    response.body =
+        "{\"error\":\"invalid_payload\",\"message\":\"request body is empty\"}";
+    return response;
+  }
+
+  std::string ensure_error;
+  if (!EnsureDirectoryExists(ring_sounds_dir_, &ensure_error)) {
+    response.status = 500;
+    response.body = "{\"error\":\"ring_sounds_unavailable\",\"message\":" +
+                    JsonString(ensure_error) + "}";
+    return response;
+  }
+
+  const std::filesystem::path sound_path =
+      std::filesystem::path(ring_sounds_dir_) / sound_name;
+  {
+    std::ofstream output(sound_path, std::ios::binary | std::ios::trunc);
+    if (!output.is_open()) {
+      response.status = 500;
+      response.body =
+          "{\"error\":\"save_failed\",\"message\":\"failed to open destination\"}";
+      return response;
+    }
+    output.write(request.body.data(), static_cast<std::streamsize>(request.body.size()));
+    if (!output.good()) {
+      response.status = 500;
+      response.body =
+          "{\"error\":\"save_failed\",\"message\":\"failed to write destination\"}";
+      return response;
+    }
+  }
+
+  response.status = 200;
+  response.body = "{\"uploaded\":" + JsonString(sound_name) + "}";
+  return response;
+}
+
+WebServer::HttpResponse WebServer::HandleSelectRingSound(const HttpRequest& request) {
+  HttpResponse response;
+  const JsonParseResult parsed = ParseJson(request.body);
+  if (!parsed.success || parsed.value.type() != JsonValue::Type::kObject) {
+    response.status = 400;
+    response.body =
+        "{\"error\":\"invalid_json\",\"message\":\"payload must be an object\"}";
+    return response;
+  }
+
+  std::vector<ValidationError> parse_errors;
+  const auto sound_name = ReadRequiredString(parsed.value, "name", &parse_errors);
+  if (!parse_errors.empty() || !sound_name.has_value() ||
+      !IsSafeSoundName(*sound_name)) {
+    response.status = 400;
+    response.body =
+        "{\"error\":\"invalid_sound_name\",\"message\":\"Use ring-*.wav\"}";
+    return response;
+  }
+
+  std::string ensure_error;
+  if (!EnsureDirectoryExists(ring_sounds_dir_, &ensure_error)) {
+    response.status = 500;
+    response.body = "{\"error\":\"ring_sounds_unavailable\",\"message\":" +
+                    JsonString(ensure_error) + "}";
+    return response;
+  }
+
+  const std::filesystem::path source =
+      std::filesystem::path(ring_sounds_dir_) / *sound_name;
+  if (!std::filesystem::exists(source) || !std::filesystem::is_regular_file(source)) {
+    response.status = 404;
+    response.body =
+        "{\"error\":\"not_found\",\"message\":\"sound file does not exist\"}";
+    return response;
+  }
+
+  const std::filesystem::path target_path(active_ring_sound_path_);
+  std::error_code ec;
+  std::filesystem::create_directories(target_path.parent_path(), ec);
+
+  const std::filesystem::path temp_path = target_path.string() + ".tmp";
+  std::filesystem::copy_file(source, temp_path,
+                             std::filesystem::copy_options::overwrite_existing, ec);
+  if (ec) {
+    response.status = 500;
+    response.body = "{\"error\":\"activate_failed\",\"message\":" +
+                    JsonString("failed to copy selected sound") + "}";
+    return response;
+  }
+
+  std::filesystem::rename(temp_path, target_path, ec);
+  if (ec) {
+    std::filesystem::remove(temp_path, ec);
+    response.status = 500;
+    response.body = "{\"error\":\"activate_failed\",\"message\":" +
+                    JsonString("failed to activate selected sound") + "}";
+    return response;
+  }
+
+  {
+    std::ofstream selected_file(ring_sounds_dir_ + "/selected.txt",
+                                std::ios::out | std::ios::trunc);
+    if (selected_file.is_open()) {
+      selected_file << *sound_name << "\n";
+    }
+  }
+
+  response.status = 200;
+  response.body = "{\"selected\":" + JsonString(*sound_name) + "}";
   return response;
 }
 

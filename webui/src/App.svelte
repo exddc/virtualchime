@@ -34,6 +34,13 @@
     message?: string;
   };
 
+  type RingSoundsResponse = {
+    sounds?: string[];
+    selected_sound?: string;
+    error?: string;
+    message?: string;
+  };
+
   type WifiNetwork = {
     ssid: string;
     signal_dbm: number;
@@ -71,6 +78,10 @@
   let mqttTlsKeyFile = "";
   let ringTopic = "doorbell/ring";
   let mqttTopics = "";
+  let ringSounds: string[] = [];
+  let selectedRingSound = "";
+  let ringSoundUpload: File | null = null;
+  let isUploadingRingSound = false;
 
   let scanResults: WifiNetwork[] = [];
   let selectedScanSsid = "";
@@ -187,6 +198,71 @@
     observedTopics = data.topics ?? [];
   }
 
+  async function loadRingSounds(): Promise<void> {
+    const response = await fetch("/api/v1/ring/sounds");
+    const data = (await response.json()) as RingSoundsResponse;
+
+    if (!response.ok) {
+      throw new Error(data.error ?? "Failed to load ring sounds");
+    }
+
+    ringSounds = data.sounds ?? [];
+    selectedRingSound = data.selected_sound ?? "";
+  }
+
+  async function uploadRingSound(): Promise<void> {
+    if (!ringSoundUpload) {
+      throw new Error("Choose a .wav file to upload.");
+    }
+
+    const sanitizedName =
+      ringSoundUpload.name
+        .toLowerCase()
+        .replace(/[^a-z0-9_.-]/g, "-")
+        .replace(/^[.-]+/, "") || "ring-custom.wav";
+    const uploadName = sanitizedName.startsWith("ring-")
+      ? sanitizedName
+      : `ring-${sanitizedName}`;
+
+    isUploadingRingSound = true;
+    try {
+      const response = await fetch(`/api/v1/ring/sounds/${encodeURIComponent(uploadName)}`, {
+        method: "PUT",
+        body: await ringSoundUpload.arrayBuffer(),
+      });
+      const data = (await response.json()) as { error?: string; message?: string };
+
+      if (!response.ok) {
+        throw new Error(data.message ?? data.error ?? "Upload failed");
+      }
+
+      await loadRingSounds();
+      selectedRingSound = uploadName;
+      setMessage(`Uploaded ${uploadName}. Select it below to activate.`, false);
+    } finally {
+      isUploadingRingSound = false;
+    }
+  }
+
+  async function activateRingSound(): Promise<void> {
+    if (!selectedRingSound) {
+      throw new Error("Select a ring sound to activate.");
+    }
+
+    const response = await fetch("/api/v1/ring/sounds/select", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: selectedRingSound }),
+    });
+    const data = (await response.json()) as { error?: string; message?: string };
+
+    if (!response.ok) {
+      throw new Error(data.message ?? data.error ?? "Failed to activate sound");
+    }
+
+    setMessage("Ring sound updated. New rings use this sound immediately.", false);
+  }
+
   async function saveConfig(): Promise<void> {
     isSaving = true;
     setMessage("Saving and applying changes...", false);
@@ -253,7 +329,10 @@
 
   onMount(() => {
     loadConfig()
-      .then(() => loadObservedTopics())
+      .then(async () => {
+        await loadObservedTopics();
+        await loadRingSounds();
+      })
       .catch((error: unknown) => {
         const text = error instanceof Error ? error.message : String(error);
         setMessage(text, true);
@@ -315,6 +394,76 @@
       {/each}
     </select>
     <p class="hint">Selecting an SSID fills the field above.</p>
+  </section>
+
+  <section class="card">
+    <h2>Ring Sound</h2>
+    <div class="row">
+      <div>
+        <label for="ring_sound_upload">Upload WAV</label>
+        <input
+          id="ring_sound_upload"
+          type="file"
+          accept=".wav,audio/wav"
+          on:change={(event) => {
+            const target = event.currentTarget as HTMLInputElement;
+            ringSoundUpload = target.files && target.files.length > 0 ? target.files[0] : null;
+          }}
+        />
+      </div>
+      <div>
+        <label for="ring_sound_select">Available Sounds</label>
+        <select id="ring_sound_select" bind:value={selectedRingSound}>
+          <option value="">Select sound</option>
+          {#each ringSounds as sound}
+            <option value={sound}>{sound}</option>
+          {/each}
+        </select>
+      </div>
+    </div>
+    <div class="button-row">
+      <button
+        class="secondary"
+        type="button"
+        disabled={isUploadingRingSound}
+        on:click={async () => {
+          try {
+            await uploadRingSound();
+          } catch (error) {
+            setMessage(error instanceof Error ? error.message : String(error), true);
+          }
+        }}
+      >
+        Upload Sound
+      </button>
+      <button
+        type="button"
+        on:click={async () => {
+          try {
+            await activateRingSound();
+          } catch (error) {
+            setMessage(error instanceof Error ? error.message : String(error), true);
+          }
+        }}
+      >
+        Activate Selected Sound
+      </button>
+      <button
+        class="secondary"
+        type="button"
+        on:click={async () => {
+          try {
+            await loadRingSounds();
+            setMessage("Ring sounds refreshed.", false);
+          } catch (error) {
+            setMessage(error instanceof Error ? error.message : String(error), true);
+          }
+        }}
+      >
+        Refresh Sounds
+      </button>
+    </div>
+    <p class="hint">Upload a file and activate it. The chime daemon will use it for new rings without a restart.</p>
   </section>
 
   <section class="card">

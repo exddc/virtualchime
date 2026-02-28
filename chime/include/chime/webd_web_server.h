@@ -24,7 +24,8 @@ class WebServer {
             WifiScanner& wifi_scanner, ApplyManager& apply_manager,
             std::string bind_address, int port, std::string cert_path,
             std::string key_path, std::string ui_dist_dir,
-            std::string observed_topics_path);
+            std::string observed_topics_path, std::string ring_sounds_dir,
+            std::string active_ring_sound_path);
   ~WebServer();
 
   WebServer(const WebServer&) = delete;
@@ -56,6 +57,9 @@ class WebServer {
   HttpResponse HandlePostCoreConfig(const HttpRequest& request);
   HttpResponse HandleWifiScan();
   HttpResponse HandleGetObservedTopics();
+  HttpResponse HandleGetRingSounds();
+  HttpResponse HandleUploadRingSound(const HttpRequest& request);
+  HttpResponse HandleSelectRingSound(const HttpRequest& request);
   HttpResponse ReservedNotImplemented(const std::string& path) const;
   std::optional<HttpResponse> TryServeExternalUi(
       const HttpRequest& request) const;
@@ -73,6 +77,8 @@ class WebServer {
   std::string key_path_;
   std::string ui_dist_dir_;
   std::string observed_topics_path_;
+  std::string ring_sounds_dir_;
+  std::string active_ring_sound_path_;
 
   std::atomic<bool> running_{false};
   int listen_fd_ = -1;
