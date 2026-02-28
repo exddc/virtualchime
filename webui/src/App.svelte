@@ -468,7 +468,7 @@
       <button
         class="secondary"
         type="button"
-        disabled={isUploadingRingSound}
+        disabled={isUploadingRingSound || !ringSoundUpload}
         on:click={async () => {
           try {
             await uploadRingSound();
@@ -481,7 +481,7 @@
       </button>
       <button
         type="button"
-        disabled={isUploadingRingSound}
+        disabled={isUploadingRingSound || !selectedRingSound}
         on:click={async () => {
           try {
             await activateRingSound();

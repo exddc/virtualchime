@@ -110,19 +110,7 @@ bool EnsureDirectoryExists(const std::string& path, std::string* error) {
     return true;
   }
 
-  if (!std::filesystem::create_directories(path, ec)) {
-    if (ec) {
-      if (error != nullptr) {
-        *error = "create_directories(" + path + ") failed: " + ec.message();
-      }
-      return false;
-    }
-    if (error != nullptr) {
-      *error = "failed to create directory: " + path;
-    }
-    return false;
-  }
-
+  const bool created = std::filesystem::create_directories(path, ec);
   if (ec) {
     if (error != nullptr) {
       *error = "create_directories(" + path + ") failed: " + ec.message();
@@ -130,6 +118,7 @@ bool EnsureDirectoryExists(const std::string& path, std::string* error) {
     return false;
   }
 
+  (void)created;
   return true;
 }
 
