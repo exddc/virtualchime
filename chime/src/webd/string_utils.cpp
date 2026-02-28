@@ -5,11 +5,11 @@
 
 namespace chime::webd {
 
-std::string ToLower(const std::string& value) {
-  std::string lowered = value;
-  std::transform(lowered.begin(), lowered.end(), lowered.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  return lowered;
+std::string ToLower(const std::string &value) {
+    std::string lowered = value;
+    std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return lowered;
 }
 
-}  // namespace chime::webd
+} // namespace chime::webd

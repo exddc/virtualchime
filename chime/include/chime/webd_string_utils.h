@@ -5,8 +5,8 @@
 
 namespace chime::webd {
 
-std::string ToLower(const std::string& value);
+std::string ToLower(const std::string &value);
 
-}  // namespace chime::webd
+} // namespace chime::webd
 
 #endif
