@@ -4,12 +4,16 @@ on:
   push:
     paths:
       - "chime/**"
+      - "common/**"
+      - "scripts/chime_ci.sh"
       - ".github/workflows/chime-ci.yml"
       - ".clang-format"
       - ".clang-tidy"
   pull_request:
     paths:
       - "chime/**"
+      - "common/**"
+      - "scripts/chime_ci.sh"
       - ".github/workflows/chime-ci.yml"
       - ".clang-format"
       - ".clang-tidy"
@@ -28,6 +32,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up CMake 4.x
         uses: jwlawson/actions-setup-cmake@v2
@@ -43,36 +49,36 @@ jobs:
             libssl-dev \
             clang-format clang-tidy
 
-      - name: Configure
+      - name: Determine CI file scope
         run: |
-          cmake --version
-          cmake -S chime -B chime/build \
-            -G Ninja \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-
-      - name: Build
-        run: |
-          cmake --build chime/build --config ${{ matrix.build_type }}
-
-      - name: clang-format (check)
-        run: |
-          files=$(find chime -type f \( -name "*.c" -o -name "*.cc" -o -name "*.cpp" -o -name "*.h" -o -name "*.hpp" \))
-          if [ -z "$files" ]; then
-            echo "No source files found to format."
-            exit 0
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base_sha="${{ github.event.pull_request.base.sha }}"
+            if ! git cat-file -e "${base_sha}^{commit}" 2>/dev/null; then
+              git fetch --no-tags --depth=1 origin "${base_sha}" || true
+            fi
+            if git cat-file -e "${base_sha}^{commit}" 2>/dev/null; then
+              echo "CHIME_CI_SCOPE=changed" >> "$GITHUB_ENV"
+              echo "CHIME_CI_BASE_REF=${base_sha}" >> "$GITHUB_ENV"
+            else
+              echo "CHIME_CI_SCOPE=all" >> "$GITHUB_ENV"
+              echo "CHIME_CI_BASE_REF=" >> "$GITHUB_ENV"
+            fi
+          elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            before_sha="${{ github.event.before }}"
+            if git cat-file -e "${before_sha}^{commit}" 2>/dev/null; then
+              echo "CHIME_CI_SCOPE=changed" >> "$GITHUB_ENV"
+              echo "CHIME_CI_BASE_REF=${before_sha}" >> "$GITHUB_ENV"
+            else
+              echo "CHIME_CI_SCOPE=all" >> "$GITHUB_ENV"
+              echo "CHIME_CI_BASE_REF=" >> "$GITHUB_ENV"
+            fi
+          else
+            echo "CHIME_CI_SCOPE=all" >> "$GITHUB_ENV"
+            echo "CHIME_CI_BASE_REF=" >> "$GITHUB_ENV"
           fi
-          clang-format --version
-          clang-format -n -Werror $files
 
-      - name: clang-tidy
+      - name: Run chime CI checks
+        env:
+          BUILD_TYPE: ${{ matrix.build_type }}
         run: |
-          clang-tidy --version
-          files=$(find chime -type f \( -name "*.cc" -o -name "*.cpp" \))
-          if [ -z "$files" ]; then
-            echo "No .cc/.cpp files found to analyze."
-            exit 0
-          fi
-          clang-tidy \
-            -p chime/build \
-            $files
+          bash ./scripts/chime_ci.sh
