@@ -1210,6 +1210,12 @@ WebServer::HttpResponse WebServer::HandleGetRingSounds() {
     }
     sounds.push_back(name);
   }
+
+  if (ec) {
+    logger_.Warn("webd", "failed to iterate ring sounds directory: " +
+                            ring_sounds_dir_ + " error=" + ec.message());
+  }
+
   std::sort(sounds.begin(), sounds.end());
 
   response.status = 200;
@@ -1334,6 +1340,12 @@ WebServer::HttpResponse WebServer::HandleSelectRingSound(const HttpRequest& requ
   const std::filesystem::path target_path(active_ring_sound_path_);
   std::error_code ec;
   std::filesystem::create_directories(target_path.parent_path(), ec);
+  if (ec) {
+    response.status = 500;
+    response.body = "{\"error\":\"create_directory_failed\",\"message\":" +
+                    JsonString("failed to create parent directory: " + ec.message()) + "}";
+    return response;
+  }
 
   const std::filesystem::path temp_path = target_path.string() + ".tmp";
   std::filesystem::copy_file(source, temp_path,

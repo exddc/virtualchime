@@ -250,7 +250,6 @@
     }
 
     const uploadName = buildUploadSoundName(ringSoundUpload.name);
-    preparedUploadName = uploadName;
 
     isUploadingRingSound = true;
     try {
