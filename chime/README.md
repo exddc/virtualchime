@@ -5,6 +5,18 @@
 
 Operational runbook: `RELIABILITY_RUNBOOK.md`.
 
+## Local CI Checks
+
+Run the same checks as GitHub chime CI from the repo root:
+
+```bash
+./scripts/chime_ci.sh
+```
+
+Useful options:
+- `./scripts/chime_ci.sh --fix-format` to apply `clang-format` to the checked files.
+- `CHIME_CI_SCOPE=changed CHIME_CI_BASE_REF=origin/main ./scripts/chime_ci.sh` to lint/format only files changed from a base ref.
+
 ## Runtime Behavior
 
 1. Loads config from `/etc/chime.conf` (or `$CHIME_CONFIG`).
