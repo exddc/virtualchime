@@ -39,6 +39,8 @@ class WebServer {
     std::string method;
     std::string path;
     std::string body;
+    std::string content_type;
+    bool has_content_type = false;
   };
 
   struct HttpResponse {

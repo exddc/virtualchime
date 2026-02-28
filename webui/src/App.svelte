@@ -249,6 +249,19 @@
       throw new Error("Choose a .wav file to upload.");
     }
 
+    const fileNameLower = ringSoundUpload.name.toLowerCase();
+    const hasWavExtension = fileNameLower.endsWith(".wav");
+    const hasWavMimeType =
+      ringSoundUpload.type === "audio/wav" || ringSoundUpload.type === "audio/x-wav";
+    if (!hasWavExtension && !hasWavMimeType) {
+      isUploadingRingSound = false;
+      throw new Error("Please select a .wav file.");
+    }
+    if (ringSoundUpload.size > 2 * 1024 * 1024) {
+      isUploadingRingSound = false;
+      throw new Error("File must be <= 2MB.");
+    }
+
     const uploadName = buildUploadSoundName(ringSoundUpload.name);
 
     isUploadingRingSound = true;

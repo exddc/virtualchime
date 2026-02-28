@@ -7,6 +7,7 @@
 #include <chrono>
 #include <ctime>
 #include <cstring>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -18,6 +19,7 @@
 #include <vector>
 
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -47,6 +49,16 @@ constexpr std::size_t kMaxBodyBytes = 2 * 1024 * 1024;
 bool StartsWith(const std::string& value, const std::string& prefix) {
   return value.size() >= prefix.size() &&
          value.compare(0, prefix.size(), prefix) == 0;
+}
+
+
+
+std::string MimeTypeOnly(const std::string& content_type) {
+  const std::size_t semicolon = content_type.find(';');
+  const std::string raw = semicolon == std::string::npos
+                              ? content_type
+                              : content_type.substr(0, semicolon);
+  return ToLower(vc::config::trim(raw));
 }
 
 bool IsSafeRelativePath(const std::filesystem::path& path) {
@@ -854,6 +866,10 @@ bool WebServer::ReadHttpRequest(void* ssl_ptr, HttpRequest* request,
   request->method = method;
   request->path = path;
   request->body = std::move(body);
+  const auto content_type_it = headers.find("content-type");
+  request->has_content_type = content_type_it != headers.end();
+  request->content_type =
+      content_type_it != headers.end() ? content_type_it->second : "";
   return true;
 }
 
@@ -1186,9 +1202,10 @@ WebServer::HttpResponse WebServer::HandleGetRingSounds() {
     return response;
   }
 
+  const std::string selected_path = ring_sounds_dir_ + "/selected.txt";
   std::string selected_name;
   {
-    std::ifstream selected_file(ring_sounds_dir_ + "/selected.txt");
+    std::ifstream selected_file(selected_path);
     if (selected_file.is_open()) {
       std::getline(selected_file, selected_name);
       selected_name = vc::config::trim(selected_name);
@@ -1218,6 +1235,20 @@ WebServer::HttpResponse WebServer::HandleGetRingSounds() {
 
   std::sort(sounds.begin(), sounds.end());
 
+  bool selected_name_valid = IsSafeSoundName(selected_name);
+  if (selected_name_valid) {
+    selected_name_valid =
+        std::find(sounds.begin(), sounds.end(), selected_name) != sounds.end();
+  }
+  if (!selected_name_valid && !selected_name.empty()) {
+    selected_name.clear();
+    std::ofstream selected_file(selected_path, std::ios::out | std::ios::trunc);
+    if (!selected_file.is_open()) {
+      logger_.Warn("webd", "failed to clear invalid selected sound file: " +
+                              selected_path + " error=" + std::strerror(errno));
+    }
+  }
+
   response.status = 200;
   response.body = "{";
   response.body += "\"selected_sound\":" + JsonString(selected_name) + ",";
@@ -1243,11 +1274,21 @@ WebServer::HttpResponse WebServer::HandleUploadRingSound(const HttpRequest& requ
         "{\"error\":\"invalid_sound_name\",\"message\":\"Use ring-*.wav\"}";
     return response;
   }
+  if (request.has_content_type) {
+    const std::string mime_type = MimeTypeOnly(request.content_type);
+    if (mime_type != "audio/wav" && mime_type != "audio/x-wav") {
+      response.status = 415;
+      response.body =
+          "{\"error\":\"invalid_payload\",\"message\":\"payload is not a WAV file\"}";
+      return response;
+    }
+  }
 
-  if (request.body.empty()) {
-    response.status = 400;
+  if (request.body.size() < 12 || request.body.rfind("RIFF", 0) != 0 ||
+      request.body.compare(8, 4, "WAVE") != 0) {
+    response.status = 415;
     response.body =
-        "{\"error\":\"invalid_payload\",\"message\":\"request body is empty\"}";
+        "{\"error\":\"invalid_payload\",\"message\":\"payload is not a WAV file\"}";
     return response;
   }
 
@@ -1369,18 +1410,39 @@ WebServer::HttpResponse WebServer::HandleSelectRingSound(const HttpRequest& requ
   bool selection_persisted = true;
   {
     const std::string selected_path = ring_sounds_dir_ + "/selected.txt";
-    std::ofstream selected_file(selected_path, std::ios::out | std::ios::trunc);
-    if (!selected_file.is_open()) {
+    const std::string temp_selected_path = selected_path + ".tmp";
+    const std::string selected_value = *sound_name + "\n";
+
+    int fd = open(temp_selected_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) {
       selection_persisted = false;
-      logger_.Warn("webd", "failed to open selected file for write: " + selected_path +
-                              " error=" + std::strerror(errno));
+      logger_.Warn("webd", "failed to open selected file for write: " +
+                              temp_selected_path + " error=" +
+                              std::strerror(errno));
     } else {
-      selected_file << *sound_name << "\n";
-      selected_file.flush();
-      if (!selected_file.good()) {
+      bool io_ok = true;
+      const ssize_t written =
+          write(fd, selected_value.data(), static_cast<size_t>(selected_value.size()));
+      if (written != static_cast<ssize_t>(selected_value.size())) {
+        io_ok = false;
+      }
+      if (io_ok && fsync(fd) != 0) {
+        io_ok = false;
+      }
+      if (close(fd) != 0) {
+        io_ok = false;
+      }
+      if (!io_ok) {
+        selection_persisted = false;
+        logger_.Warn("webd", "failed to write selected file: " +
+                                temp_selected_path + " error=" +
+                                std::strerror(errno));
+        std::remove(temp_selected_path.c_str());
+      } else if (std::rename(temp_selected_path.c_str(), selected_path.c_str()) != 0) {
         selection_persisted = false;
         logger_.Warn("webd", "failed to write selected file: " + selected_path +
                                 " error=" + std::strerror(errno));
+        std::remove(temp_selected_path.c_str());
       }
     }
   }
