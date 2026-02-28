@@ -1,18 +1,25 @@
-cmake_minimum_required(VERSION 4.0)
+cmake_minimum_required(VERSION 3.28)
 project(chime LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(MOSQ REQUIRED libmosquitto)
+pkg_check_modules(MOSQ QUIET libmosquitto)
+
+if(MOSQ_FOUND)
+  set(VC_MQTT_CLIENT_SOURCE ../common/src/mqtt/client.cpp)
+else()
+  message(WARNING "libmosquitto not found; building with MQTT stub client")
+  set(VC_MQTT_CLIENT_SOURCE ../common/src/mqtt/client_stub.cpp)
+endif()
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 
 add_library(
   vc_common STATIC
   ../common/src/logging/logger.cpp
-  ../common/src/mqtt/client.cpp
+  ${VC_MQTT_CLIENT_SOURCE}
   ../common/src/runtime/signal_handler.cpp
   ../common/src/util/environment.cpp
   ../common/src/util/filesystem.cpp
@@ -20,9 +27,12 @@ add_library(
   ../common/src/util/strings.cpp
   ../common/src/util/time.cpp)
 target_include_directories(vc_common PUBLIC ../common/include)
-target_include_directories(vc_common PRIVATE ${MOSQ_INCLUDE_DIRS})
-target_compile_options(vc_common PRIVATE -Wall -Wextra -Wpedantic ${MOSQ_CFLAGS_OTHER})
-target_link_libraries(vc_common PRIVATE ${MOSQ_LIBRARIES})
+target_compile_options(vc_common PRIVATE -Wall -Wextra -Wpedantic)
+if(MOSQ_FOUND)
+  target_include_directories(vc_common PRIVATE ${MOSQ_INCLUDE_DIRS})
+  target_compile_options(vc_common PRIVATE ${MOSQ_CFLAGS_OTHER})
+  target_link_libraries(vc_common PRIVATE ${MOSQ_LIBRARIES})
+endif()
 
 add_library(
   chime_core STATIC
@@ -40,6 +50,7 @@ add_library(
   src/webd/config_store.cpp
   src/webd/json.cpp
   src/webd/mdns.cpp
+  src/webd/string_utils.cpp
   src/webd/ui_assets.cpp
   src/webd/web_server.cpp
   src/webd/wifi_scan.cpp)
