@@ -1,0 +1,16 @@
+{
+  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "files": {
+    "ignore": ["dist", "node_modules", "src/**/*.svelte"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space"
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true
+    }
+  }
+}
