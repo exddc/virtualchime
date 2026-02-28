@@ -1,7 +1,5 @@
 #include "chime/chime_service.h"
 
-#include <mosquitto.h>
-
 #include <algorithm>
 #include <chrono>
 #include <ctime>
@@ -28,6 +26,14 @@ constexpr std::time_t kMinimumSaneEpoch = 1704067200;
 constexpr std::size_t kMaxPayloadLogBytes = 256;
 constexpr std::size_t kMaxObservedTopics = 256;
 constexpr const char* kObservedTopicsPath = "/var/lib/chime/observed_topics.txt";
+
+const char* MqttConnackString(int rc) {
+  return rc == 0 ? "Connection Accepted" : "Connection Refused";
+}
+
+const char* MqttErrorString(int rc) {
+  return rc == 0 ? "No error" : "MQTT error";
+}
 
 std::vector<std::string> SplitTopic(std::string_view topic) {
   std::vector<std::string> levels;
@@ -166,7 +172,7 @@ int ChimeService::Run(vc::runtime::SignalHandler& signal_handler) {
       break;
     }
 
-    if (loop_rc != MOSQ_ERR_SUCCESS) {
+    if (loop_rc != 0) {
       loop_errors_.fetch_add(1, std::memory_order_relaxed);
       logger_.Warn("mqtt", mqtt_client_.LastError() + " (reconnecting)");
       std::this_thread::sleep_for(std::chrono::seconds(kReconnectDelaySeconds));
@@ -243,9 +249,9 @@ int ChimeService::Run(vc::runtime::SignalHandler& signal_handler) {
 }
 
 void ChimeService::OnConnect(int rc) {
-  if (rc != MOSQ_ERR_SUCCESS) {
+  if (rc != 0) {
     logger_.Error("mqtt", "connect callback failed: code=" + std::to_string(rc) +
-                              " '" + mosquitto_connack_string(rc) + "'");
+                              " '" + MqttConnackString(rc) + "'");
     mqtt_connected_ = false;
     return;
   }
@@ -264,12 +270,12 @@ void ChimeService::OnConnect(int rc) {
 
 void ChimeService::OnDisconnect(int rc) {
   mqtt_connected_ = false;
-  if (rc == MOSQ_ERR_SUCCESS) {
+  if (rc == 0) {
     logger_.Info("mqtt", "disconnected cleanly");
     return;
   }
   logger_.Warn("mqtt", "unexpected disconnect: code=" + std::to_string(rc) +
-                           " '" + mosquitto_strerror(rc) + "'");
+                           " '" + MqttErrorString(rc) + "'");
 }
 
 void ChimeService::OnMessage(const vc::mqtt::Message& message) {
