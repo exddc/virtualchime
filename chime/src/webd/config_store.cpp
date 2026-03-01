@@ -448,6 +448,17 @@ std::vector<ValidationError> ConfigStore::ValidateRequest(
     errors.push_back({"ring_topic", "ring_topic is invalid"});
   }
 
+  if (request.config.volume_bell < 0 || request.config.volume_bell > 100) {
+    errors.push_back({"volume_bell", "volume_bell must be 0-100"});
+  }
+  if (request.config.volume_notifications < 0 ||
+      request.config.volume_notifications > 100) {
+    errors.push_back({"volume_notifications", "volume_notifications must be 0-100"});
+  }
+  if (request.config.volume_other < 0 || request.config.volume_other > 100) {
+    errors.push_back({"volume_other", "volume_other must be 0-100"});
+  }
+
   return errors;
 }
 
@@ -500,6 +511,22 @@ SaveResult ConfigStore::LoadCoreConfigInternal() const {
 
   const std::string ring_topic = ExtractConfigValue(chime_lines, "ring_topic");
   config.ring_topic = ring_topic.empty() ? defaults.ring_topic : ring_topic;
+
+  const std::string volume_bell_raw = ExtractConfigValue(chime_lines, "volume_bell");
+  int volume_bell = defaults.volume_bell;
+  ParseInt(volume_bell_raw, 0, 100, &volume_bell);
+  config.volume_bell = volume_bell;
+
+  const std::string volume_notifications_raw =
+      ExtractConfigValue(chime_lines, "volume_notifications");
+  int volume_notifications = defaults.volume_notifications;
+  ParseInt(volume_notifications_raw, 0, 100, &volume_notifications);
+  config.volume_notifications = volume_notifications;
+
+  const std::string volume_other_raw = ExtractConfigValue(chime_lines, "volume_other");
+  int volume_other = defaults.volume_other;
+  ParseInt(volume_other_raw, 0, 100, &volume_other);
+  config.volume_other = volume_other;
 
   std::vector<std::string> wpa_lines;
   if (!ReadAllLinesIfExists(wpa_supplicant_path_, &wpa_lines, &error)) {
@@ -554,6 +581,9 @@ bool ConfigStore::SaveChimeConfig(const SaveRequest& request,
       {"mqtt_tls_key_file", request.config.mqtt_tls_key_file},
       {"mqtt_topics", JoinCsv(request.config.mqtt_topics)},
       {"ring_topic", request.config.ring_topic},
+      {"volume_bell", std::to_string(request.config.volume_bell)},
+      {"volume_notifications", std::to_string(request.config.volume_notifications)},
+      {"volume_other", std::to_string(request.config.volume_other)},
   };
 
   std::set<std::string> seen;

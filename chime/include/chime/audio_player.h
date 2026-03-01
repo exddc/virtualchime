@@ -13,7 +13,7 @@ namespace chime {
 class AudioPlayer {
  public:
   virtual ~AudioPlayer() = default;
-  virtual void Play(const std::string& path) = 0;
+  virtual void Play(const std::string& path, int volume_percent = 100) = 0;
   virtual bool IsPlaying() const = 0;
 };
 
@@ -21,7 +21,7 @@ class AplayAudioPlayer final : public AudioPlayer {
  public:
   explicit AplayAudioPlayer(vc::logging::Logger& logger);
 
-  void Play(const std::string& path) override;
+  void Play(const std::string& path, int volume_percent = 100) override;
   bool IsPlaying() const override;
 
  private:

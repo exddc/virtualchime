@@ -32,3 +32,7 @@ This variant is built for the Raspberry Pi Zero W and uses the LSM-104F-8 speake
 | Pin 35 (GPIO19)    | LRC       |
 | Pin 40 (GPIO21)    | DIN       |
 | 5V                 | SD        |
+
+## Volume control note
+
+MAX98357A does not expose runtime digital volume control over I2S. On common breakout boards, gain is selected by the SD/GAIN pin strapping and is therefore hardware-defined unless that pin is connected to a controllable GPIO. In this project, volume is handled in software via ALSA mixer level before playback.

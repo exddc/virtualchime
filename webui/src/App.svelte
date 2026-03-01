@@ -29,6 +29,9 @@
     mqtt_tls_key_file?: string;
     mqtt_topics?: string[];
     ring_topic?: string;
+    volume_bell?: number;
+    volume_notifications?: number;
+    volume_other?: number;
     apply?: ApplyStatus;
     error?: string;
     message?: string;
@@ -77,6 +80,9 @@
   let mqttTlsCertFile = "";
   let mqttTlsKeyFile = "";
   let ringTopic = "doorbell/ring";
+  let volumeBell = 80;
+  let volumeNotifications = 70;
+  let volumeOther = 70;
   let mqttTopics = "";
   let ringSounds: string[] = [];
   let selectedRingSound = "";
@@ -124,6 +130,9 @@
     mqttTlsCertFile = data.mqtt_tls_cert_file ?? "";
     mqttTlsKeyFile = data.mqtt_tls_key_file ?? "";
     ringTopic = data.ring_topic ?? "doorbell/ring";
+    volumeBell = data.volume_bell ?? 80;
+    volumeNotifications = data.volume_notifications ?? 70;
+    volumeOther = data.volume_other ?? 70;
     mqttTopics = (data.mqtt_topics ?? []).join(",");
 
     const wifiHint = data.wifi_password_set
@@ -334,6 +343,9 @@
       mqtt_tls_key_file: mqttTlsKeyFile.trim(),
       mqtt_topics: parseTopics(mqttTopics),
       ring_topic: ringTopic.trim(),
+      volume_bell: Number(volumeBell),
+      volume_notifications: Number(volumeNotifications),
+      volume_other: Number(volumeOther),
     };
 
     try {
@@ -520,6 +532,34 @@
       </button>
     </div>
     <p class="hint">Upload a file and activate it. The chime daemon will use it for new rings without a restart.</p>
+  </section>
+
+  <section class="card">
+    <h2>Volume</h2>
+    <div class="row">
+      <div>
+        <label for="volume_bell">Bell (%)</label>
+        <input id="volume_bell" type="number" min="0" max="100" bind:value={volumeBell} />
+      </div>
+      <div>
+        <label for="volume_notifications">Notifications (%)</label>
+        <input
+          id="volume_notifications"
+          type="number"
+          min="0"
+          max="100"
+          bind:value={volumeNotifications}
+        />
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label for="volume_other">Other (%)</label>
+        <input id="volume_other" type="number" min="0" max="100" bind:value={volumeOther} />
+      </div>
+      <div></div>
+    </div>
+    <p class="hint">These are software volume levels (0-100) applied before playback.</p>
   </section>
 
   <section class="card">
