@@ -995,6 +995,9 @@ WebServer::HttpResponse WebServer::HandleGetCoreConfig() {
     response.body += "\"mqtt_tls_key_file\":" + JsonString(loaded.snapshot.config.mqtt_tls_key_file) + ",";
     response.body += "\"mqtt_topics\":" + SerializeTopics(loaded.snapshot.config.mqtt_topics) + ",";
     response.body += "\"ring_topic\":" + JsonString(loaded.snapshot.config.ring_topic) + ",";
+    response.body += "\"volume_bell\":" + JsonNumber(loaded.snapshot.config.volume_bell) + ",";
+    response.body += "\"volume_notifications\":" + JsonNumber(loaded.snapshot.config.volume_notifications) + ",";
+    response.body += "\"volume_other\":" + JsonNumber(loaded.snapshot.config.volume_other) + ",";
     response.body += "\"apply\":" + SerializeApplyStatus(apply_manager_.CurrentStatus());
     response.body += "}";
     return response;
@@ -1033,6 +1036,10 @@ WebServer::HttpResponse WebServer::HandlePostCoreConfig(const HttpRequest &reque
     const auto mqtt_tls_key_file = ReadRequiredString(parsed.value, "mqtt_tls_key_file", &parse_errors);
     const auto mqtt_topics = ReadRequiredStringArray(parsed.value, "mqtt_topics", &parse_errors);
     const auto ring_topic = ReadRequiredString(parsed.value, "ring_topic", &parse_errors);
+    const auto volume_bell = ReadRequiredInt(parsed.value, "volume_bell", &parse_errors);
+    const auto volume_notifications =
+        ReadRequiredInt(parsed.value, "volume_notifications", &parse_errors);
+    const auto volume_other = ReadRequiredInt(parsed.value, "volume_other", &parse_errors);
     const auto wifi_password = ReadOptionalString(parsed.value, "wifi_password", &parse_errors);
     const auto mqtt_password = ReadOptionalString(parsed.value, "mqtt_password", &parse_errors);
 
@@ -1057,6 +1064,9 @@ WebServer::HttpResponse WebServer::HandlePostCoreConfig(const HttpRequest &reque
     save_request.config.mqtt_tls_key_file = *mqtt_tls_key_file;
     save_request.config.mqtt_topics = *mqtt_topics;
     save_request.config.ring_topic = *ring_topic;
+    save_request.config.volume_bell = *volume_bell;
+    save_request.config.volume_notifications = *volume_notifications;
+    save_request.config.volume_other = *volume_other;
     save_request.wifi_password = wifi_password;
     save_request.mqtt_password = mqtt_password;
 
@@ -1095,6 +1105,9 @@ WebServer::HttpResponse WebServer::HandlePostCoreConfig(const HttpRequest &reque
     response.body += "\"mqtt_tls_key_file\":" + JsonString(saved.snapshot.config.mqtt_tls_key_file) + ",";
     response.body += "\"mqtt_topics\":" + SerializeTopics(saved.snapshot.config.mqtt_topics) + ",";
     response.body += "\"ring_topic\":" + JsonString(saved.snapshot.config.ring_topic) + ",";
+    response.body += "\"volume_bell\":" + JsonNumber(saved.snapshot.config.volume_bell) + ",";
+    response.body += "\"volume_notifications\":" + JsonNumber(saved.snapshot.config.volume_notifications) + ",";
+    response.body += "\"volume_other\":" + JsonNumber(saved.snapshot.config.volume_other) + ",";
     response.body += "\"apply\":" + SerializeApplyStatus(apply);
     response.body += "}";
 

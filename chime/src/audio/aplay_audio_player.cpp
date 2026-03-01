@@ -1,5 +1,6 @@
 #include "chime/audio_player.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <string>
@@ -14,7 +15,7 @@ namespace chime {
 
 AplayAudioPlayer::AplayAudioPlayer(vc::logging::Logger& logger) : logger_(logger) {}
 
-void AplayAudioPlayer::Play(const std::string& path) {
+void AplayAudioPlayer::Play(const std::string& path, int volume_percent) {
   bool expected = false;
   if (!playing_.compare_exchange_strong(expected, true)) {
     logger_.Warn("audio", "already playing, skipping new request");
@@ -22,7 +23,8 @@ void AplayAudioPlayer::Play(const std::string& path) {
   }
 
   if (!vc::util::IsLinux()) {
-    logger_.Info("audio", "(local) would play '" + path + "'");
+    logger_.Info("audio", "(local) would play '" + path + "' volume=" +
+                              std::to_string(volume_percent) + "%");
     playing_ = false;
     return;
   }
@@ -33,9 +35,21 @@ void AplayAudioPlayer::Play(const std::string& path) {
     return;
   }
 
-  std::thread([this, path]() {
+  const int effective_volume = std::clamp(volume_percent, 0, 100);
+
+  std::thread([this, path, effective_volume]() {
     const auto started = std::chrono::steady_clock::now();
-    logger_.Info("audio", "playing '" + path + "'");
+    logger_.Info("audio", "playing '" + path + "' at " +
+                              std::to_string(effective_volume) + "%");
+
+    const std::string set_volume_cmd =
+        "amixer -q sset PCM \"" + std::to_string(effective_volume) +
+        "%\" >/dev/null 2>&1";
+    const int volume_rc = std::system(set_volume_cmd.c_str());
+    if (volume_rc != 0) {
+      logger_.Warn("audio", "failed to set volume via amixer, code=" +
+                                std::to_string(volume_rc));
+    }
 
     const std::string cmd =
         "aplay -q \"" + vc::util::EscapeShellDoubleQuotes(path) +
