@@ -111,10 +111,19 @@
   }
 
   function clampVolumeValue(value: unknown, fallback: number): number {
+    if (value == null) {
+      return fallback;
+    }
+
+    if (typeof value === "string" && value.trim().length === 0) {
+      return fallback;
+    }
+
     const parsed = typeof value === "number" ? value : Number(value);
     if (!Number.isFinite(parsed)) {
       return fallback;
     }
+
     return Math.min(100, Math.max(0, Math.round(parsed)));
   }
 
@@ -555,7 +564,7 @@
     <div class="row">
       <div>
         <label for="volume_bell">Bell (%)</label>
-        <input id="volume_bell" type="number" min="0" max="100" bind:value={volumeBell} />
+        <input id="volume_bell" type="number" min="0" max="100" step="1" bind:value={volumeBell} />
       </div>
       <div>
         <label for="volume_notifications">Notifications (%)</label>
@@ -564,6 +573,7 @@
           type="number"
           min="0"
           max="100"
+          step="1"
           bind:value={volumeNotifications}
         />
       </div>
@@ -571,7 +581,7 @@
     <div class="row">
       <div>
         <label for="volume_other">Other (%)</label>
-        <input id="volume_other" type="number" min="0" max="100" bind:value={volumeOther} />
+        <input id="volume_other" type="number" min="0" max="100" step="1" bind:value={volumeOther} />
       </div>
       <div></div>
     </div>
