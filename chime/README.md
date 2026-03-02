@@ -71,6 +71,9 @@ Daemon keys:
 - `ring_topic`
   - Supports MQTT topic filters (`+` and `#`) for matching incoming message topics
 - `sound_path`
+- `volume_bell` (0-100, bell/ring events)
+- `volume_notifications` (0-100, startup/notification category)
+- `volume_other` (0-100, fallback category)
 - `audio_enabled`
 - `wifi_interface`
 - `wifi_check_interval` (0 disables WiFi state checks)

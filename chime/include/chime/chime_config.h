@@ -26,6 +26,9 @@ struct ChimeConfig {
 
   std::string ring_topic = "doorbell/ring";
   std::string sound_path = "/usr/local/share/chime/ring.wav";
+  int volume_bell = 80;
+  int volume_notifications = 70;
+  int volume_other = 70;
   bool audio_enabled = true;
 
   std::string wifi_interface = "wlan0";

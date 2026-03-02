@@ -26,6 +26,9 @@ struct CoreConfig {
   std::string mqtt_tls_key_file;
   std::vector<std::string> mqtt_topics;
   std::string ring_topic = "doorbell/ring";
+  int volume_bell = 80;
+  int volume_notifications = 70;
+  int volume_other = 70;
 };
 
 struct CoreConfigSnapshot {
