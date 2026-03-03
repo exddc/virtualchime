@@ -205,7 +205,7 @@ run_biome() {
     return
   }
 
-  require_tool npm
+  require_tool bun
 
   local files=()
   load_file_array webui files
@@ -219,10 +219,10 @@ run_biome() {
 
   pushd "$PROJECT_DIR/webui" >/dev/null
   if [ "$FIX_FORMAT" = "1" ]; then
-    npx --no-install @biomejs/biome check --write "${files[@]/#webui\//}"
+    bunx --bun @biomejs/biome check --write "${files[@]/#webui\//}"
     log "Applied biome formatting/lint fixes"
   else
-    npx --no-install @biomejs/biome check "${files[@]/#webui\//}"
+    bunx --bun @biomejs/biome check "${files[@]/#webui\//}"
     log "biome check passed"
   fi
   popd >/dev/null
