@@ -56,6 +56,7 @@ class WebServer {
     HttpResponse HandleGetCoreConfig();
     HttpResponse HandlePostCoreConfig(const HttpRequest &request);
     HttpResponse HandleWifiScan();
+    HttpResponse HandleGetSystemVersion();
     HttpResponse HandleGetObservedTopics();
     HttpResponse HandleGetRingSounds();
     HttpResponse HandleUploadRingSound(const HttpRequest &request);

@@ -32,6 +32,21 @@ body {
   box-shadow: 0 6px 24px rgba(15, 118, 110, 0.08);
 }
 
+.version-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 4px 0 14px;
+}
+
+.version-strip .dot {
+  color: #94a3b8;
+}
+
 h1 {
   margin: 0 0 8px;
   font-size: 28px;
