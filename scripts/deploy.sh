@@ -209,9 +209,9 @@ deploy_webd_to_pi() {
 }
 
 build_webui_assets() {
-    [ -x "$LOCAL_CHIME_SCRIPT" ] || error "Local build script not found at $LOCAL_CHIME_SCRIPT"
+    [ -r "$LOCAL_CHIME_SCRIPT" ] || error "Local build script not readable at $LOCAL_CHIME_SCRIPT"
     log "Building web UI assets..."
-    "$LOCAL_CHIME_SCRIPT" webui-build
+    bash "$LOCAL_CHIME_SCRIPT" webui-build || error "Unable to run $LOCAL_CHIME_SCRIPT via bash for webui-build"
     [ -d "$WEBUI_DIST_DIR" ] || error "Web UI build completed but dist directory missing at $WEBUI_DIST_DIR"
 }
 

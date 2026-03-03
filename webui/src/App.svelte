@@ -446,7 +446,8 @@
         await Promise.all([
           loadObservedTopics(),
           loadRingSounds(),
-          loadSystemVersion().catch(() => {
+          loadSystemVersion().catch((error: unknown) => {
+            console.warn("loadSystemVersion failed", error);
             chimeVersion = "unknown";
             osVersion = "unknown";
             configVersion = "unknown";

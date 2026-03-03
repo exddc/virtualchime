@@ -155,8 +155,8 @@ void TrySeedDefaultRingSound(const std::string &ring_sounds_dir, const std::stri
         return;
     }
     if (ec) {
-        logger.Warn("webd", "failed to inspect default ring sound target: " + target_path.string() + " error=" +
-                                ec.message());
+        logger.Warn("webd",
+                    "failed to inspect default ring sound target: " + target_path.string() + " error=" + ec.message());
         return;
     }
 
@@ -1099,8 +1099,7 @@ WebServer::HttpResponse WebServer::HandlePostCoreConfig(const HttpRequest &reque
     const auto mqtt_topics = ReadRequiredStringArray(parsed.value, "mqtt_topics", &parse_errors);
     const auto ring_topic = ReadRequiredString(parsed.value, "ring_topic", &parse_errors);
     const auto volume_bell = ReadRequiredInt(parsed.value, "volume_bell", &parse_errors);
-    const auto volume_notifications =
-        ReadRequiredInt(parsed.value, "volume_notifications", &parse_errors);
+    const auto volume_notifications = ReadRequiredInt(parsed.value, "volume_notifications", &parse_errors);
     const auto volume_other = ReadRequiredInt(parsed.value, "volume_other", &parse_errors);
     const auto wifi_password = ReadOptionalString(parsed.value, "wifi_password", &parse_errors);
     const auto mqtt_password = ReadOptionalString(parsed.value, "mqtt_password", &parse_errors);
@@ -1218,9 +1217,9 @@ WebServer::HttpResponse WebServer::HandleGetSystemVersion() {
         return chime_version_fallback;
     }();
 
-    const std::string os_version = ReadValueOrDefault(
-        release_values, "VIRTUALCHIME_OS_VERSION_FULL",
-        ReadValueOrDefault(release_values, "VIRTUALCHIME_OS_VERSION", "unknown"));
+    const std::string os_version =
+        ReadValueOrDefault(release_values, "VIRTUALCHIME_OS_VERSION_FULL",
+                           ReadValueOrDefault(release_values, "VIRTUALCHIME_OS_VERSION", "unknown"));
     const std::string config_version = ReadValueOrDefault(release_values, "CHIME_CONFIG_VERSION", "unknown");
 
     response.status = 200;
