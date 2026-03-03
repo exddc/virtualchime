@@ -41,6 +41,20 @@ struct MixerSetResult {
     std::string control_name;
 };
 
+struct PlaybackThreadCleanup {
+    std::string *temporary_scaled_path = nullptr;
+    std::atomic<bool> *playing = nullptr;
+
+    ~PlaybackThreadCleanup() {
+        if (temporary_scaled_path != nullptr && !temporary_scaled_path->empty()) {
+            std::remove(temporary_scaled_path->c_str());
+        }
+        if (playing != nullptr) {
+            playing->store(false);
+        }
+    }
+};
+
 uint16_t ReadLe16(const std::vector<uint8_t> &data, std::size_t offset) {
     return static_cast<uint16_t>(data[offset]) | (static_cast<uint16_t>(data[offset + 1]) << 8);
 }
@@ -310,49 +324,53 @@ void AplayAudioPlayer::Play(const std::string &path, int volume_percent) {
     }
     try {
         playback_thread_ = std::thread([logger, playing, path, effective_volume]() {
-        const auto started = std::chrono::steady_clock::now();
-        logger->Info("audio", "playing '" + path + "' at " + std::to_string(effective_volume) + "%");
+            std::string temporary_scaled_path;
+            const PlaybackThreadCleanup cleanup{&temporary_scaled_path, playing};
 
-        const MixerSetResult mixer_result = TrySetVolumeWithAmixer(effective_volume);
-        std::string playback_path = path;
-        std::string temporary_scaled_path;
-        if (!mixer_result.success) {
-            logger->Warn("audio", "failed to set volume via amixer using known controls; ring volume "
-                                  "setting may have no audible effect (tried: " +
-                                      MixerCandidatesForLog() + ")");
+            try {
+                const auto started = std::chrono::steady_clock::now();
+                logger->Info("audio", "playing '" + path + "' at " + std::to_string(effective_volume) + "%");
 
-            if (effective_volume < 100) {
-                std::string scale_error;
-                if (CreateSoftwareScaledWav(path, effective_volume, &temporary_scaled_path, &scale_error)) {
-                    playback_path = temporary_scaled_path;
-                    logger->Info("audio",
-                                 "using software-scaled wav fallback at " + std::to_string(effective_volume) + "%");
+                const MixerSetResult mixer_result = TrySetVolumeWithAmixer(effective_volume);
+                std::string playback_path = path;
+                if (!mixer_result.success) {
+                    logger->Warn("audio", "failed to set volume via amixer using known controls; ring volume "
+                                          "setting may have no audible effect (tried: " +
+                                              MixerCandidatesForLog() + ")");
+
+                    if (effective_volume < 100) {
+                        std::string scale_error;
+                        if (CreateSoftwareScaledWav(path, effective_volume, &temporary_scaled_path, &scale_error)) {
+                            playback_path = temporary_scaled_path;
+                            logger->Info("audio", "using software-scaled wav fallback at " +
+                                                      std::to_string(effective_volume) + "%");
+                        } else {
+                            logger->Warn("audio", "software volume fallback unavailable: " + scale_error);
+                        }
+                    }
                 } else {
-                    logger->Warn("audio", "software volume fallback unavailable: " + scale_error);
+                    logger->Info("audio", "applied mixer control '" + mixer_result.control_name + "' to " +
+                                              std::to_string(effective_volume) + "%");
                 }
+
+                const std::string cmd =
+                    "aplay -q \"" + vc::util::EscapeShellDoubleQuotes(playback_path) + "\" 2>/dev/null";
+                const int rc = std::system(cmd.c_str());
+
+                const auto elapsed_ms =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started)
+                        .count();
+                if (rc != 0) {
+                    logger->Error("audio", "aplay failed with code " + std::to_string(rc));
+                } else {
+                    logger->Info("audio", "playback complete in " + std::to_string(elapsed_ms) + "ms");
+                }
+            } catch (const std::exception &error) {
+                logger->Error("audio", "playback thread exception: " + std::string(error.what()));
+            } catch (...) {
+                logger->Error("audio", "playback thread exception: unknown");
             }
-        } else {
-            logger->Info("audio", "applied mixer control '" + mixer_result.control_name + "' to " +
-                                      std::to_string(effective_volume) + "%");
-        }
-
-        const std::string cmd = "aplay -q \"" + vc::util::EscapeShellDoubleQuotes(playback_path) + "\" 2>/dev/null";
-        const int rc = std::system(cmd.c_str());
-
-        if (!temporary_scaled_path.empty()) {
-            std::remove(temporary_scaled_path.c_str());
-        }
-
-        const auto elapsed_ms =
-            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count();
-        if (rc != 0) {
-            logger->Error("audio", "aplay failed with code " + std::to_string(rc));
-        } else {
-            logger->Info("audio", "playback complete in " + std::to_string(elapsed_ms) + "ms");
-        }
-
-        playing->store(false);
-    });
+        });
     } catch (const std::exception &error) {
         playing_.store(false);
         logger_.Error("audio", "failed to start playback thread: " + std::string(error.what()));
