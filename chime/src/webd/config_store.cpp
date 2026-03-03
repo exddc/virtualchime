@@ -448,6 +448,17 @@ std::vector<ValidationError> ConfigStore::ValidateRequest(
     errors.push_back({"ring_topic", "ring_topic is invalid"});
   }
 
+  if (request.config.notification_success_sound_path.empty() ||
+      request.config.notification_success_sound_path.size() > 256) {
+    errors.push_back({"notification_success_sound_path",
+                      "notification_success_sound_path must be 1-256 chars"});
+  }
+  if (request.config.notification_failure_sound_path.empty() ||
+      request.config.notification_failure_sound_path.size() > 256) {
+    errors.push_back({"notification_failure_sound_path",
+                      "notification_failure_sound_path must be 1-256 chars"});
+  }
+
   if (request.config.volume_bell < 0 || request.config.volume_bell > 100) {
     errors.push_back({"volume_bell", "volume_bell must be 0-100"});
   }
@@ -511,6 +522,20 @@ SaveResult ConfigStore::LoadCoreConfigInternal() const {
 
   const std::string ring_topic = ExtractConfigValue(chime_lines, "ring_topic");
   config.ring_topic = ring_topic.empty() ? defaults.ring_topic : ring_topic;
+
+  const std::string notification_success_sound_path =
+      ExtractConfigValue(chime_lines, "notification_success_sound_path");
+  config.notification_success_sound_path =
+      notification_success_sound_path.empty()
+          ? defaults.notification_success_sound_path
+          : notification_success_sound_path;
+
+  const std::string notification_failure_sound_path =
+      ExtractConfigValue(chime_lines, "notification_failure_sound_path");
+  config.notification_failure_sound_path =
+      notification_failure_sound_path.empty()
+          ? defaults.notification_failure_sound_path
+          : notification_failure_sound_path;
 
   const std::string volume_bell_raw = ExtractConfigValue(chime_lines, "volume_bell");
   int volume_bell = defaults.volume_bell;
@@ -581,6 +606,8 @@ bool ConfigStore::SaveChimeConfig(const SaveRequest& request,
       {"mqtt_tls_key_file", request.config.mqtt_tls_key_file},
       {"mqtt_topics", JoinCsv(request.config.mqtt_topics)},
       {"ring_topic", request.config.ring_topic},
+      {"notification_success_sound_path", request.config.notification_success_sound_path},
+      {"notification_failure_sound_path", request.config.notification_failure_sound_path},
       {"volume_bell", std::to_string(request.config.volume_bell)},
       {"volume_notifications", std::to_string(request.config.volume_notifications)},
       {"volume_other", std::to_string(request.config.volume_other)},

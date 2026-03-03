@@ -26,6 +26,8 @@ struct CoreConfig {
   std::string mqtt_tls_key_file;
   std::vector<std::string> mqtt_topics;
   std::string ring_topic = "doorbell/ring";
+  std::string notification_success_sound_path = "/usr/local/share/chime/test.wav";
+  std::string notification_failure_sound_path = "/usr/local/share/chime/ring.wav";
   int volume_bell = 80;
   int volume_notifications = 70;
   int volume_other = 70;

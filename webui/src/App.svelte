@@ -29,6 +29,8 @@
     mqtt_tls_key_file?: string;
     mqtt_topics?: string[];
     ring_topic?: string;
+    notification_success_sound_path?: string;
+    notification_failure_sound_path?: string;
     volume_bell?: number;
     volume_notifications?: number;
     volume_other?: number;
@@ -80,6 +82,8 @@
   let mqttTlsCertFile = "";
   let mqttTlsKeyFile = "";
   let ringTopic = "doorbell/ring";
+  let notificationSuccessSoundPath = "/usr/local/share/chime/test.wav";
+  let notificationFailureSoundPath = "/usr/local/share/chime/ring.wav";
   let volumeBell = 80;
   let volumeNotifications = 70;
   let volumeOther = 70;
@@ -147,6 +151,10 @@
     mqttTlsCertFile = data.mqtt_tls_cert_file ?? "";
     mqttTlsKeyFile = data.mqtt_tls_key_file ?? "";
     ringTopic = data.ring_topic ?? "doorbell/ring";
+    notificationSuccessSoundPath =
+      data.notification_success_sound_path ?? "/usr/local/share/chime/test.wav";
+    notificationFailureSoundPath =
+      data.notification_failure_sound_path ?? "/usr/local/share/chime/ring.wav";
     volumeBell = data.volume_bell ?? 80;
     volumeNotifications = data.volume_notifications ?? 70;
     volumeOther = data.volume_other ?? 70;
@@ -368,6 +376,8 @@
       mqtt_tls_key_file: mqttTlsKeyFile.trim(),
       mqtt_topics: parseTopics(mqttTopics),
       ring_topic: ringTopic.trim(),
+      notification_success_sound_path: notificationSuccessSoundPath.trim(),
+      notification_failure_sound_path: notificationFailureSoundPath.trim(),
       volume_bell: safeVolumeBell,
       volume_notifications: safeVolumeNotifications,
       volume_other: safeVolumeOther,
@@ -557,6 +567,30 @@
       </button>
     </div>
     <p class="hint">Upload a file and activate it. The chime daemon will use it for new rings without a restart.</p>
+  </section>
+
+
+  <section class="card">
+    <h2>Notifications</h2>
+    <div class="row">
+      <div>
+        <label for="notification_success_sound_path">Success Sound Path</label>
+        <input
+          id="notification_success_sound_path"
+          bind:value={notificationSuccessSoundPath}
+          placeholder="/usr/local/share/chime/test.wav"
+        />
+      </div>
+      <div>
+        <label for="notification_failure_sound_path">Failure Sound Path</label>
+        <input
+          id="notification_failure_sound_path"
+          bind:value={notificationFailureSoundPath}
+          placeholder="/usr/local/share/chime/ring.wav"
+        />
+      </div>
+    </div>
+    <p class="hint">Used for startup and other system notification beeps.</p>
   </section>
 
   <section class="card">

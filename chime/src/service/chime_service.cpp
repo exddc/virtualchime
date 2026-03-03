@@ -22,6 +22,7 @@ namespace {
 constexpr int kMqttLoopTimeoutMs = 100;
 constexpr int kReconnectDelaySeconds = 1;
 constexpr int kHealthLogIntervalSeconds = 60;
+constexpr int kStartupNotificationTimeoutSeconds = 10;
 constexpr std::time_t kMinimumSaneEpoch = 1704067200;
 constexpr std::size_t kMaxPayloadLogBytes = 256;
 constexpr std::size_t kMaxObservedTopics = 256;
@@ -105,6 +106,9 @@ int ChimeService::Run(vc::runtime::SignalHandler &signal_handler) {
                              "s topic=" + config_.heartbeat_topic);
     logger_.Info("audio", "enabled=" + vc::util::BoolToString(config_.audio_enabled) +
                               " ring_topic=" + config_.ring_topic + " sound_path=" + config_.sound_path);
+    logger_.Info("audio", "notifications success_path=" + config_.notification_success_sound_path +
+                              " failure_path=" + config_.notification_failure_sound_path +
+                              " volume=" + std::to_string(config_.volume_notifications));
     logger_.Info("wifi", "monitor interface=" + config_.wifi_interface +
                              " interval=" + std::to_string(config_.wifi_check_interval) + "s");
 
@@ -137,17 +141,20 @@ int ChimeService::Run(vc::runtime::SignalHandler &signal_handler) {
     auto last_wifi_check = last_heartbeat;
     std::optional<WifiState> last_wifi_state;
 
-    if (config_.wifi_check_interval > 0) {
-        const auto wifi_state = wifi_monitor_.ReadState(config_.wifi_interface);
-        if (wifi_state.has_value()) {
-            LogWifiState(*wifi_state);
-            last_wifi_state = wifi_state;
-        } else {
-            logger_.Info("wifi", "monitor disabled on non-Linux platform");
-        }
+    const auto startup_wifi_state = wifi_monitor_.ReadState(config_.wifi_interface);
+    if (startup_wifi_state.has_value()) {
+        LogWifiState(*startup_wifi_state);
+        last_wifi_state = startup_wifi_state;
     } else {
-        logger_.Info("wifi", "monitor disabled by config");
+        logger_.Info("wifi", "monitor unavailable on this platform");
     }
+
+    if (config_.wifi_check_interval <= 0) {
+        logger_.Info("wifi", "periodic monitor disabled by config");
+    }
+
+    bool startup_notification_played = false;
+    const auto startup_begin = std::chrono::steady_clock::now();
 
     while (!signal_handler.ShouldStop()) {
         const int loop_rc = mqtt_client_.Loop(kMqttLoopTimeoutMs, 1);
@@ -193,6 +200,25 @@ int ChimeService::Run(vc::runtime::SignalHandler &signal_handler) {
                     last_wifi_state = current_state;
                 }
                 last_wifi_check = now;
+            }
+        }
+
+        if (!startup_notification_played) {
+            const bool wifi_connected = WifiStateIsConnected(last_wifi_state);
+            const bool mqtt_connected = mqtt_connected_.load();
+            const auto startup_elapsed =
+                std::chrono::duration_cast<std::chrono::seconds>(now - startup_begin).count();
+
+            if (wifi_connected && mqtt_connected) {
+                logger_.Info("audio", "startup checks passed (wifi + mqtt), playing success notification");
+                PlayNotification(NotificationSoundType::kSuccess);
+                startup_notification_played = true;
+            } else if (startup_elapsed >= kStartupNotificationTimeoutSeconds) {
+                logger_.Warn("audio", "startup checks incomplete within " +
+                                         std::to_string(kStartupNotificationTimeoutSeconds) +
+                                         "s, playing failure notification");
+                PlayNotification(NotificationSoundType::kFailure);
+                startup_notification_played = true;
             }
         }
 
@@ -364,6 +390,26 @@ bool ChimeService::PersistObservedTopics(std::string *error) const {
         return false;
     }
     return true;
+}
+
+bool ChimeService::WifiStateIsConnected(const std::optional<WifiState> &state) const {
+    if (!state.has_value()) {
+        return false;
+    }
+    return state->interface_present && state->operstate == "up" && state->carrier != 0;
+}
+
+void ChimeService::PlayNotification(NotificationSoundType type) {
+    if (!config_.audio_enabled) {
+        return;
+    }
+
+    if (type == NotificationSoundType::kSuccess) {
+        audio_player_.Play(config_.notification_success_sound_path, config_.volume_notifications);
+        return;
+    }
+
+    audio_player_.Play(config_.notification_failure_sound_path, config_.volume_notifications);
 }
 
 void ChimeService::LogWifiState(const WifiState &state) const {
