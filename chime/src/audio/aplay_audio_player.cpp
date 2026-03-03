@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <exception>
 #include <fstream>
 #include <string>
 #include <thread>
@@ -273,6 +274,13 @@ std::string MixerCandidatesForLog() {
 
 AplayAudioPlayer::AplayAudioPlayer(vc::logging::Logger &logger) : logger_(logger) {}
 
+AplayAudioPlayer::~AplayAudioPlayer() {
+    std::lock_guard<std::mutex> lock(playback_thread_mutex_);
+    if (playback_thread_.joinable()) {
+        playback_thread_.join();
+    }
+}
+
 void AplayAudioPlayer::Play(const std::string &path, int volume_percent) {
     bool expected = false;
     if (!playing_.compare_exchange_strong(expected, true)) {
@@ -293,16 +301,23 @@ void AplayAudioPlayer::Play(const std::string &path, int volume_percent) {
     }
 
     const int effective_volume = std::clamp(volume_percent, 0, 100);
+    auto *const logger = &logger_;
+    auto *const playing = &playing_;
 
-    std::thread([this, path, effective_volume]() {
+    std::lock_guard<std::mutex> lock(playback_thread_mutex_);
+    if (playback_thread_.joinable()) {
+        playback_thread_.join();
+    }
+    try {
+        playback_thread_ = std::thread([logger, playing, path, effective_volume]() {
         const auto started = std::chrono::steady_clock::now();
-        logger_.Info("audio", "playing '" + path + "' at " + std::to_string(effective_volume) + "%");
+        logger->Info("audio", "playing '" + path + "' at " + std::to_string(effective_volume) + "%");
 
         const MixerSetResult mixer_result = TrySetVolumeWithAmixer(effective_volume);
         std::string playback_path = path;
         std::string temporary_scaled_path;
         if (!mixer_result.success) {
-            logger_.Warn("audio", "failed to set volume via amixer using known controls; ring volume "
+            logger->Warn("audio", "failed to set volume via amixer using known controls; ring volume "
                                   "setting may have no audible effect (tried: " +
                                       MixerCandidatesForLog() + ")");
 
@@ -310,14 +325,14 @@ void AplayAudioPlayer::Play(const std::string &path, int volume_percent) {
                 std::string scale_error;
                 if (CreateSoftwareScaledWav(path, effective_volume, &temporary_scaled_path, &scale_error)) {
                     playback_path = temporary_scaled_path;
-                    logger_.Info("audio",
+                    logger->Info("audio",
                                  "using software-scaled wav fallback at " + std::to_string(effective_volume) + "%");
                 } else {
-                    logger_.Warn("audio", "software volume fallback unavailable: " + scale_error);
+                    logger->Warn("audio", "software volume fallback unavailable: " + scale_error);
                 }
             }
         } else {
-            logger_.Info("audio", "applied mixer control '" + mixer_result.control_name + "' to " +
+            logger->Info("audio", "applied mixer control '" + mixer_result.control_name + "' to " +
                                       std::to_string(effective_volume) + "%");
         }
 
@@ -331,13 +346,17 @@ void AplayAudioPlayer::Play(const std::string &path, int volume_percent) {
         const auto elapsed_ms =
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count();
         if (rc != 0) {
-            logger_.Error("audio", "aplay failed with code " + std::to_string(rc));
+            logger->Error("audio", "aplay failed with code " + std::to_string(rc));
         } else {
-            logger_.Info("audio", "playback complete in " + std::to_string(elapsed_ms) + "ms");
+            logger->Info("audio", "playback complete in " + std::to_string(elapsed_ms) + "ms");
         }
 
-        playing_ = false;
-    }).detach();
+        playing->store(false);
+    });
+    } catch (const std::exception &error) {
+        playing_.store(false);
+        logger_.Error("audio", "failed to start playback thread: " + std::string(error.what()));
+    }
 }
 
 bool AplayAudioPlayer::IsPlaying() const {
