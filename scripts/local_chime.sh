@@ -125,6 +125,7 @@ build_chime_binary() {
             "$PROJECT_DIR/common/src" \
             -type f -name '*.cpp' \
             ! -path "$CHIME_DIR/src/webd/*" \
+            ! -path "$PROJECT_DIR/common/src/mqtt/client_stub.cpp" \
             | sort
     )
 
@@ -170,6 +171,7 @@ build_webd_binary() {
         "$CHIME_DIR/src/webd/config_store.cpp"
         "$CHIME_DIR/src/webd/json.cpp"
         "$CHIME_DIR/src/webd/mdns.cpp"
+        "$CHIME_DIR/src/webd/string_utils.cpp"
         "$CHIME_DIR/src/webd/ui_assets.cpp"
         "$CHIME_DIR/src/webd/web_server.cpp"
         "$CHIME_DIR/src/webd/wifi_scan.cpp"

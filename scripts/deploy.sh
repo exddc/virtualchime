@@ -14,6 +14,7 @@ CHIME_BINARY="$OUTPUT_DIR/chime"
 WEBD_BINARY="$OUTPUT_DIR/chime-webd"
 BUILDROOT_VERSION="${BUILDROOT_VERSION:-2024.02.1}"
 BUILD_META_SCRIPT="$SCRIPT_DIR/write_build_meta.sh"
+LOCAL_CHIME_SCRIPT="$SCRIPT_DIR/local_chime.sh"
 
 SSH_USER="root"
 SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=10"
@@ -207,6 +208,13 @@ deploy_webd_to_pi() {
     ssh $SSH_OPTS "$SSH_USER@$host" "/etc/init.d/S45webd status"
 }
 
+build_webui_assets() {
+    [ -r "$LOCAL_CHIME_SCRIPT" ] || error "Local build script not readable at $LOCAL_CHIME_SCRIPT"
+    log "Building web UI assets..."
+    bash "$LOCAL_CHIME_SCRIPT" webui-build || error "Unable to run $LOCAL_CHIME_SCRIPT via bash for webui-build"
+    [ -d "$WEBUI_DIST_DIR" ] || error "Web UI build completed but dist directory missing at $WEBUI_DIST_DIR"
+}
+
 cmd_chime() {
     if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
         usage_chime
@@ -259,6 +267,9 @@ cmd_chime() {
         binary_path="$CHIME_BINARY"
     else
         rebuild_chime_binary
+        if [ "$with_webd" -eq 1 ]; then
+            build_webui_assets
+        fi
         binary_path="$CHIME_BINARY"
     fi
 

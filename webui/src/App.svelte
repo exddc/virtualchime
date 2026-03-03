@@ -62,6 +62,14 @@
     message?: string;
   };
 
+  type SystemVersionResponse = {
+    chime_version?: string;
+    os_version?: string;
+    config_version?: string;
+    error?: string;
+    message?: string;
+  };
+
   type SaveResponse = CoreConfigResponse & {
     validation_errors?: ValidationError[];
   };
@@ -93,6 +101,9 @@
   let scanResults: WifiNetwork[] = [];
   let selectedScanSsid = "";
   let observedTopics: string[] = [];
+  let chimeVersion = "unknown";
+  let osVersion = "unknown";
+  let configVersion = "unknown";
 
   let messageText = "";
   let messageIsError = false;
@@ -223,6 +234,19 @@
     }
 
     observedTopics = data.topics ?? [];
+  }
+
+  async function loadSystemVersion(): Promise<void> {
+    const response = await fetch("/api/v1/system/version");
+    const data = (await response.json()) as SystemVersionResponse;
+
+    if (!response.ok) {
+      throw new Error(data.error ?? "Failed to load system version");
+    }
+
+    chimeVersion = data.chime_version?.trim() || "unknown";
+    osVersion = data.os_version?.trim() || "unknown";
+    configVersion = data.config_version?.trim() || "unknown";
   }
 
   async function loadRingSounds(): Promise<void> {
@@ -419,7 +443,16 @@
   onMount(() => {
     loadConfig()
       .then(async () => {
-        await Promise.all([loadObservedTopics(), loadRingSounds()]);
+        await Promise.all([
+          loadObservedTopics(),
+          loadRingSounds(),
+          loadSystemVersion().catch((error: unknown) => {
+            console.warn("loadSystemVersion failed", error);
+            chimeVersion = "unknown";
+            osVersion = "unknown";
+            configVersion = "unknown";
+          }),
+        ]);
       })
       .catch((error: unknown) => {
         const text = error instanceof Error ? error.message : String(error);
@@ -716,5 +749,13 @@
         {messageText}
       </div>
     {/if}
+  </section>
+
+  <section class="version-strip">
+    <span>Chime {chimeVersion}</span>
+    <span class="dot">•</span>
+    <span>OS {osVersion}</span>
+    <span class="dot">•</span>
+    <span>Config {configVersion}</span>
   </section>
 </div>
