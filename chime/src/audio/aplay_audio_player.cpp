@@ -171,6 +171,12 @@ bool ScalePcmWavInMemory(std::vector<uint8_t> *wav_bytes, int effective_volume, 
 
     const double gain = static_cast<double>(effective_volume) / 100.0;
     if (bits_per_sample == 16) {
+        if (data_size % 2 != 0) {
+            if (error != nullptr) {
+                *error = "invalid 16-bit PCM data size";
+            }
+            return false;
+        }
         for (std::size_t i = 0; i + 1 < data_size; i += 2) {
             const std::size_t sample_offset = data_offset + i;
             const int16_t sample = static_cast<int16_t>(static_cast<uint16_t>((*wav_bytes)[sample_offset]) |
