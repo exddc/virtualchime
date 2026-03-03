@@ -46,6 +46,8 @@ namespace {
 constexpr std::size_t kMaxRequestBytes = 65536;
 constexpr std::size_t kMaxBodyBytes = 2 * 1024 * 1024;
 constexpr const char *kDefaultRingSoundName = "ring-default.wav";
+constexpr const char *kReleaseInfoPath = "/etc/virtualchime-release";
+constexpr const char *kAppVersionPath = "/etc/chime-app-version";
 
 bool StartsWith(const std::string &value, const std::string &prefix) {
     return value.size() >= prefix.size() && value.compare(0, prefix.size(), prefix) == 0;
@@ -260,6 +262,56 @@ std::vector<std::string> ReadObservedTopicsFromFile(const std::string &path, std
         }
     }
     return topics;
+}
+
+std::string ReadTrimmedFirstLine(const std::string &path) {
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        return "";
+    }
+    std::string line;
+    if (!std::getline(file, line)) {
+        return "";
+    }
+    return vc::config::trim(line);
+}
+
+std::map<std::string, std::string> ReadKeyValueFile(const std::string &path) {
+    std::map<std::string, std::string> values;
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        return values;
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        const std::string trimmed = vc::config::trim(line);
+        if (trimmed.empty() || trimmed[0] == '#') {
+            continue;
+        }
+
+        const std::size_t separator = trimmed.find('=');
+        if (separator == std::string::npos) {
+            continue;
+        }
+
+        const std::string key = vc::config::trim(trimmed.substr(0, separator));
+        const std::string value = vc::config::trim(trimmed.substr(separator + 1));
+        if (!key.empty()) {
+            values[key] = value;
+        }
+    }
+
+    return values;
+}
+
+std::string ReadValueOrDefault(const std::map<std::string, std::string> &values, const std::string &key,
+                               const std::string &fallback) {
+    const auto it = values.find(key);
+    if (it == values.end() || it->second.empty()) {
+        return fallback;
+    }
+    return it->second;
 }
 
 std::string StatusText(int code) {
@@ -905,6 +957,16 @@ WebServer::HttpResponse WebServer::Route(const HttpRequest &request) {
         return HandleWifiScan();
     }
 
+    if (request.path == "/api/v1/system/version") {
+        if (request.method != "GET") {
+            HttpResponse response;
+            response.status = 405;
+            response.body = "{\"error\":\"method_not_allowed\"}";
+            return response;
+        }
+        return HandleGetSystemVersion();
+    }
+
     if (request.path == "/api/v1/mqtt/topics") {
         if (request.method != "GET") {
             HttpResponse response;
@@ -1139,6 +1201,34 @@ WebServer::HttpResponse WebServer::HandleWifiScan() {
     response.body += "]";
     response.body += "}";
 
+    return response;
+}
+
+WebServer::HttpResponse WebServer::HandleGetSystemVersion() {
+    HttpResponse response;
+    const std::map<std::string, std::string> release_values = ReadKeyValueFile(kReleaseInfoPath);
+
+    const std::string chime_version_fallback = ReadValueOrDefault(
+        release_values, "CHIME_APP_VERSION_FULL", ReadValueOrDefault(release_values, "CHIME_APP_VERSION", "unknown"));
+    const std::string chime_version = [&]() {
+        const std::string app_version_file = ReadTrimmedFirstLine(kAppVersionPath);
+        if (!app_version_file.empty()) {
+            return app_version_file;
+        }
+        return chime_version_fallback;
+    }();
+
+    const std::string os_version = ReadValueOrDefault(
+        release_values, "VIRTUALCHIME_OS_VERSION_FULL",
+        ReadValueOrDefault(release_values, "VIRTUALCHIME_OS_VERSION", "unknown"));
+    const std::string config_version = ReadValueOrDefault(release_values, "CHIME_CONFIG_VERSION", "unknown");
+
+    response.status = 200;
+    response.body = "{";
+    response.body += "\"chime_version\":" + JsonString(chime_version) + ",";
+    response.body += "\"os_version\":" + JsonString(os_version) + ",";
+    response.body += "\"config_version\":" + JsonString(config_version);
+    response.body += "}";
     return response;
 }
 
