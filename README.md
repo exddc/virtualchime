@@ -4,6 +4,8 @@ Virtual Chime is an open source smart doorbell system built for people who want 
 
 The system is designed to be a simple and affordable alternative to expensive designer doorbells. There should not be a compromise between security, privacy and good design. Virtual Chime aims to be as beautiful as designer doorbells, as secure as the most expensive security systems, and as private as your own home.
 
+Read more about the rewrite process in my [blog post](https://timoweiss.me/blog/rewriting-virtual-chime).
+
 ## Current Status: Full Rewrite
 
 This repository is being actively rewritten from scratch. After 1.5 years of running the original system in production, lessons learned have led to a completely new architecture. The old code is in the `old` branch and will be removed once the rewrite is complete.
