@@ -5,18 +5,28 @@ on:
     paths:
       - "chime/**"
       - "common/**"
+      - "webui/**"
       - "scripts/chime_ci.sh"
+      - "scripts/lint_format_ci.sh"
       - ".github/workflows/chime-ci.yml"
       - ".clang-format"
       - ".clang-tidy"
+      - "webui/biome.json"
+      - "webui/package.json"
+      - "webui/bun.lock"
   pull_request:
     paths:
       - "chime/**"
       - "common/**"
+      - "webui/**"
       - "scripts/chime_ci.sh"
+      - "scripts/lint_format_ci.sh"
       - ".github/workflows/chime-ci.yml"
       - ".clang-format"
       - ".clang-tidy"
+      - "webui/biome.json"
+      - "webui/package.json"
+      - "webui/bun.lock"
   workflow_dispatch:
 
 jobs:
@@ -40,6 +50,9 @@ jobs:
         with:
           cmake-version: "4.0.0"
 
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
       - name: Install deps
         run: |
           sudo apt-get update
@@ -48,6 +61,10 @@ jobs:
             libmosquitto-dev \
             libssl-dev \
             clang-format clang-tidy
+
+      - name: Install webui deps
+        working-directory: webui
+        run: bun install --frozen-lockfile
 
       - name: Determine CI file scope
         run: |
@@ -76,6 +93,10 @@ jobs:
             echo "CHIME_CI_SCOPE=all" >> "$GITHUB_ENV"
             echo "CHIME_CI_BASE_REF=" >> "$GITHUB_ENV"
           fi
+
+      - name: Run repository lint/format checks
+        run: |
+          bash ./scripts/lint_format_ci.sh
 
       - name: Run chime CI checks
         env:
