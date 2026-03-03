@@ -30,7 +30,7 @@ The first rewritten product - a purpose-built IoT speaker that plays doorbell so
 
 **Hardware:** Raspberry Pi Zero W, MAX98357A I2S amplifier, LSM-104F-8 speaker, 3D-printed enclosure
 
-See [CHIME_BOX_OVERVIEW.md](CHIME_BOX_OVERVIEW.md) for detailed technical specifications.
+See [Chime README](chime/README.md) for detailed technical specifications.
 
 ### Bell (Doorbell) - In Progress
 
@@ -50,8 +50,8 @@ The actual doorbell unit with camera, button, and MQTT integration. Currently in
 
 ## Documentation
 
-- [Chime Box Overview](CHIME_BOX_OVERVIEW.md) - Technical overview of the chime product
-- [Rewrite Blog Draft](REWRITE_BLOG_DRAFT.md) - Detailed writeup of the rewrite process and lessons learned
+- [Chime README](chime/README.md) - Technical overview of the chime product
+- [Hardware README](hardware/README.md) - Detailed writeup of the hardware designs
 
 ## License
 
