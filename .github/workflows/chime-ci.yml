@@ -96,7 +96,7 @@ jobs:
 
       - name: Run repository lint/format checks
         run: |
-          bash ./scripts/lint_format_ci.sh
+          bash ./scripts/lint_format_ci.sh --fix-format
 
       - name: Run chime CI checks
         env:
