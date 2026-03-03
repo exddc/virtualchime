@@ -17,6 +17,12 @@ Useful options:
 - `./scripts/chime_ci.sh --fix-format` to apply `clang-format` to the checked files.
 - `CHIME_CI_SCOPE=changed CHIME_CI_BASE_REF=origin/main ./scripts/chime_ci.sh` to lint/format only files changed from a base ref.
 
+For repository-wide formatting/lint checks (C/C++ + webui Biome), run:
+
+```bash
+./scripts/lint_format_ci.sh
+```
+
 ## Runtime Behavior
 
 1. Loads config from `/etc/chime.conf` (or `$CHIME_CONFIG`).

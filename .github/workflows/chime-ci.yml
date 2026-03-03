@@ -5,18 +5,28 @@ on:
     paths:
       - "chime/**"
       - "common/**"
+      - "webui/**"
       - "scripts/chime_ci.sh"
+      - "scripts/lint_format_ci.sh"
       - ".github/workflows/chime-ci.yml"
       - ".clang-format"
       - ".clang-tidy"
+      - "webui/biome.json"
+      - "webui/package.json"
+      - "webui/package-lock.json"
   pull_request:
     paths:
       - "chime/**"
       - "common/**"
+      - "webui/**"
       - "scripts/chime_ci.sh"
+      - "scripts/lint_format_ci.sh"
       - ".github/workflows/chime-ci.yml"
       - ".clang-format"
       - ".clang-tidy"
+      - "webui/biome.json"
+      - "webui/package.json"
+      - "webui/package-lock.json"
   workflow_dispatch:
 
 jobs:
@@ -40,6 +50,11 @@ jobs:
         with:
           cmake-version: "4.0.0"
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Install deps
         run: |
           sudo apt-get update
@@ -48,6 +63,10 @@ jobs:
             libmosquitto-dev \
             libssl-dev \
             clang-format clang-tidy
+
+      - name: Install webui deps
+        working-directory: webui
+        run: npm ci
 
       - name: Determine CI file scope
         run: |
@@ -76,6 +95,10 @@ jobs:
             echo "CHIME_CI_SCOPE=all" >> "$GITHUB_ENV"
             echo "CHIME_CI_BASE_REF=" >> "$GITHUB_ENV"
           fi
+
+      - name: Run repository lint/format checks
+        run: |
+          bash ./scripts/lint_format_ci.sh
 
       - name: Run chime CI checks
         env:
