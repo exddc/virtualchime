@@ -34,9 +34,13 @@ class ChimeService final : public vc::mqtt::EventHandler {
   void OnMessage(const vc::mqtt::Message& message) override;
 
  private:
+  enum class NotificationSoundType { kSuccess, kFailure };
+
   void LogWifiState(const WifiState& state) const;
   void LogHealth(bool clock_sane);
   bool RingTopicMatches(const std::string& message_topic) const;
+  bool WifiStateIsConnected(const std::optional<WifiState>& state) const;
+  void PlayNotification(NotificationSoundType type);
   void RecordObservedTopic(const std::string& topic);
   void LoadObservedTopics();
   bool PersistObservedTopics(std::string* error) const;

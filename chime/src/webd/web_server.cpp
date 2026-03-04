@@ -1057,6 +1057,10 @@ WebServer::HttpResponse WebServer::HandleGetCoreConfig() {
     response.body += "\"mqtt_tls_key_file\":" + JsonString(loaded.snapshot.config.mqtt_tls_key_file) + ",";
     response.body += "\"mqtt_topics\":" + SerializeTopics(loaded.snapshot.config.mqtt_topics) + ",";
     response.body += "\"ring_topic\":" + JsonString(loaded.snapshot.config.ring_topic) + ",";
+    response.body += "\"notification_success_sound_path\":" +
+                     JsonString(loaded.snapshot.config.notification_success_sound_path) + ",";
+    response.body += "\"notification_failure_sound_path\":" +
+                     JsonString(loaded.snapshot.config.notification_failure_sound_path) + ",";
     response.body += "\"volume_bell\":" + JsonNumber(loaded.snapshot.config.volume_bell) + ",";
     response.body += "\"volume_notifications\":" + JsonNumber(loaded.snapshot.config.volume_notifications) + ",";
     response.body += "\"volume_other\":" + JsonNumber(loaded.snapshot.config.volume_other) + ",";
@@ -1098,6 +1102,10 @@ WebServer::HttpResponse WebServer::HandlePostCoreConfig(const HttpRequest &reque
     const auto mqtt_tls_key_file = ReadRequiredString(parsed.value, "mqtt_tls_key_file", &parse_errors);
     const auto mqtt_topics = ReadRequiredStringArray(parsed.value, "mqtt_topics", &parse_errors);
     const auto ring_topic = ReadRequiredString(parsed.value, "ring_topic", &parse_errors);
+    const auto notification_success_sound_path =
+        ReadOptionalString(parsed.value, "notification_success_sound_path", &parse_errors);
+    const auto notification_failure_sound_path =
+        ReadOptionalString(parsed.value, "notification_failure_sound_path", &parse_errors);
     const auto volume_bell = ReadRequiredInt(parsed.value, "volume_bell", &parse_errors);
     const auto volume_notifications = ReadRequiredInt(parsed.value, "volume_notifications", &parse_errors);
     const auto volume_other = ReadRequiredInt(parsed.value, "volume_other", &parse_errors);
@@ -1113,6 +1121,18 @@ WebServer::HttpResponse WebServer::HandlePostCoreConfig(const HttpRequest &reque
         return response;
     }
 
+    std::optional<CoreConfigSnapshot> existing_snapshot;
+    if (!notification_success_sound_path.has_value() ||
+        !notification_failure_sound_path.has_value()) {
+        const SaveResult loaded = config_store_.LoadCoreConfig();
+        if (!loaded.success) {
+            response.status = 500;
+            response.body = "{\"error\":\"save_failed\",\"message\":" + JsonString(loaded.error) + "}";
+            return response;
+        }
+        existing_snapshot = loaded.snapshot;
+    }
+
     save_request.config.wifi_ssid = *wifi_ssid;
     save_request.config.mqtt_host = *mqtt_host;
     save_request.config.mqtt_port = *mqtt_port;
@@ -1125,6 +1145,18 @@ WebServer::HttpResponse WebServer::HandlePostCoreConfig(const HttpRequest &reque
     save_request.config.mqtt_tls_key_file = *mqtt_tls_key_file;
     save_request.config.mqtt_topics = *mqtt_topics;
     save_request.config.ring_topic = *ring_topic;
+    if (notification_success_sound_path.has_value()) {
+        save_request.config.notification_success_sound_path = *notification_success_sound_path;
+    } else if (existing_snapshot.has_value()) {
+        save_request.config.notification_success_sound_path =
+            existing_snapshot->config.notification_success_sound_path;
+    }
+    if (notification_failure_sound_path.has_value()) {
+        save_request.config.notification_failure_sound_path = *notification_failure_sound_path;
+    } else if (existing_snapshot.has_value()) {
+        save_request.config.notification_failure_sound_path =
+            existing_snapshot->config.notification_failure_sound_path;
+    }
     save_request.config.volume_bell = *volume_bell;
     save_request.config.volume_notifications = *volume_notifications;
     save_request.config.volume_other = *volume_other;
@@ -1166,6 +1198,10 @@ WebServer::HttpResponse WebServer::HandlePostCoreConfig(const HttpRequest &reque
     response.body += "\"mqtt_tls_key_file\":" + JsonString(saved.snapshot.config.mqtt_tls_key_file) + ",";
     response.body += "\"mqtt_topics\":" + SerializeTopics(saved.snapshot.config.mqtt_topics) + ",";
     response.body += "\"ring_topic\":" + JsonString(saved.snapshot.config.ring_topic) + ",";
+    response.body += "\"notification_success_sound_path\":" +
+                     JsonString(saved.snapshot.config.notification_success_sound_path) + ",";
+    response.body += "\"notification_failure_sound_path\":" +
+                     JsonString(saved.snapshot.config.notification_failure_sound_path) + ",";
     response.body += "\"volume_bell\":" + JsonNumber(saved.snapshot.config.volume_bell) + ",";
     response.body += "\"volume_notifications\":" + JsonNumber(saved.snapshot.config.volume_notifications) + ",";
     response.body += "\"volume_other\":" + JsonNumber(saved.snapshot.config.volume_other) + ",";

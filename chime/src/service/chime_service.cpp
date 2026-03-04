@@ -22,6 +22,8 @@ namespace {
 constexpr int kMqttLoopTimeoutMs = 100;
 constexpr int kReconnectDelaySeconds = 1;
 constexpr int kHealthLogIntervalSeconds = 60;
+constexpr int kStartupNotificationTimeoutSeconds = 10;
+constexpr int kStartupUnknownWifiTimeoutSeconds = 30;
 constexpr std::time_t kMinimumSaneEpoch = 1704067200;
 constexpr std::size_t kMaxPayloadLogBytes = 256;
 constexpr std::size_t kMaxObservedTopics = 256;
@@ -105,11 +107,21 @@ int ChimeService::Run(vc::runtime::SignalHandler &signal_handler) {
                              "s topic=" + config_.heartbeat_topic);
     logger_.Info("audio", "enabled=" + vc::util::BoolToString(config_.audio_enabled) +
                               " ring_topic=" + config_.ring_topic + " sound_path=" + config_.sound_path);
+    logger_.Info("audio", "notifications success_path=" + config_.notification_success_sound_path +
+                              " failure_path=" + config_.notification_failure_sound_path +
+                              " volume=" + std::to_string(config_.volume_notifications));
     logger_.Info("wifi", "monitor interface=" + config_.wifi_interface +
                              " interval=" + std::to_string(config_.wifi_check_interval) + "s");
 
-    if (config_.audio_enabled && vc::util::IsLinux() && !vc::util::FileExists(config_.sound_path)) {
-        logger_.Warn("audio", "configured sound file does not exist: " + config_.sound_path);
+    if (config_.audio_enabled && vc::util::IsLinux()) {
+        const auto validate_audio_file = [this](const std::string &path, const std::string &label) {
+            if (!vc::util::FileExists(path)) {
+                logger_.Warn("audio", "configured " + label + " file does not exist or is not readable: " + path);
+            }
+        };
+        validate_audio_file(config_.sound_path, "ring sound");
+        validate_audio_file(config_.notification_success_sound_path, "notification success sound");
+        validate_audio_file(config_.notification_failure_sound_path, "notification failure sound");
     }
 
     vc::mqtt::ConnectOptions options;
@@ -137,17 +149,35 @@ int ChimeService::Run(vc::runtime::SignalHandler &signal_handler) {
     auto last_wifi_check = last_heartbeat;
     std::optional<WifiState> last_wifi_state;
 
-    if (config_.wifi_check_interval > 0) {
-        const auto wifi_state = wifi_monitor_.ReadState(config_.wifi_interface);
-        if (wifi_state.has_value()) {
-            LogWifiState(*wifi_state);
-            last_wifi_state = wifi_state;
-        } else {
-            logger_.Info("wifi", "monitor disabled on non-Linux platform");
-        }
+    const auto startup_wifi_state = wifi_monitor_.ReadState(config_.wifi_interface);
+    if (startup_wifi_state.has_value()) {
+        LogWifiState(*startup_wifi_state);
+        last_wifi_state = startup_wifi_state;
     } else {
-        logger_.Info("wifi", "monitor disabled by config");
+        logger_.Info("wifi", "monitor unavailable on this platform");
     }
+
+    if (config_.wifi_check_interval <= 0) {
+        logger_.Info("wifi", "periodic monitor disabled by config");
+    }
+
+    const bool startup_notifications_enabled = config_.audio_enabled;
+    bool startup_notification_played = !startup_notifications_enabled;
+    bool startup_notification_unknown_logged = false;
+    std::optional<std::chrono::steady_clock::time_point> startup_unknown_wifi_begin;
+    const auto startup_begin = std::chrono::steady_clock::now();
+    const auto refresh_wifi_state = [this, &last_wifi_state]() {
+        const auto current_state = wifi_monitor_.ReadState(config_.wifi_interface);
+        if (current_state.has_value()) {
+            if (WifiStateChanged(last_wifi_state, *current_state)) {
+                LogWifiState(*current_state);
+            }
+            last_wifi_state = current_state;
+        } else if (last_wifi_state.has_value()) {
+            logger_.Warn("wifi", "state unavailable; connectivity unknown");
+            last_wifi_state = std::nullopt;
+        }
+    };
 
     while (!signal_handler.ShouldStop()) {
         const int loop_rc = mqtt_client_.Loop(kMqttLoopTimeoutMs, 1);
@@ -168,6 +198,7 @@ int ChimeService::Run(vc::runtime::SignalHandler &signal_handler) {
         }
 
         const auto now = std::chrono::steady_clock::now();
+        bool wifi_state_refreshed = false;
 
         if (config_.heartbeat_interval > 0) {
             const auto heartbeat_elapsed =
@@ -187,12 +218,52 @@ int ChimeService::Run(vc::runtime::SignalHandler &signal_handler) {
         if (config_.wifi_check_interval > 0) {
             const auto wifi_elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last_wifi_check).count();
             if (wifi_elapsed >= config_.wifi_check_interval) {
-                const auto current_state = wifi_monitor_.ReadState(config_.wifi_interface);
-                if (current_state.has_value() && WifiStateChanged(last_wifi_state, *current_state)) {
-                    LogWifiState(*current_state);
-                    last_wifi_state = current_state;
-                }
+                refresh_wifi_state();
+                wifi_state_refreshed = true;
                 last_wifi_check = now;
+            }
+        }
+
+        if (!startup_notification_played) {
+            if (!wifi_state_refreshed) {
+                refresh_wifi_state();
+            }
+            const bool wifi_state_known = last_wifi_state.has_value();
+            const bool wifi_connected = wifi_state_known && WifiStateIsConnected(last_wifi_state);
+            const bool mqtt_connected = mqtt_connected_.load();
+            const auto startup_elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - startup_begin).count();
+
+            if (wifi_connected && mqtt_connected) {
+                logger_.Info("audio", "startup checks passed (wifi + mqtt), playing success notification");
+                PlayNotification(NotificationSoundType::kSuccess);
+                startup_notification_played = true;
+            } else if (startup_elapsed >= kStartupNotificationTimeoutSeconds) {
+                if (!wifi_state_known) {
+                    if (!startup_notification_unknown_logged) {
+                        logger_.Info("audio", "startup checks deferred: wifi state unknown");
+                        startup_notification_unknown_logged = true;
+                        startup_unknown_wifi_begin = now;
+                    }
+
+                    if (startup_unknown_wifi_begin.has_value()) {
+                        const auto unknown_wifi_elapsed =
+                            std::chrono::duration_cast<std::chrono::seconds>(now - *startup_unknown_wifi_begin).count();
+                        if (unknown_wifi_elapsed >= kStartupUnknownWifiTimeoutSeconds) {
+                            logger_.Warn("audio", "startup wifi state remained unknown for " +
+                                                     std::to_string(kStartupUnknownWifiTimeoutSeconds) +
+                                                     "s after startup timeout, playing failure notification");
+                            PlayNotification(NotificationSoundType::kFailure);
+                            startup_notification_played = true;
+                        }
+                    }
+                } else {
+                    startup_unknown_wifi_begin = std::nullopt;
+                    logger_.Warn("audio", "startup checks incomplete within " +
+                                             std::to_string(kStartupNotificationTimeoutSeconds) +
+                                             "s, playing failure notification");
+                    PlayNotification(NotificationSoundType::kFailure);
+                    startup_notification_played = true;
+                }
             }
         }
 
@@ -366,6 +437,26 @@ bool ChimeService::PersistObservedTopics(std::string *error) const {
     return true;
 }
 
+bool ChimeService::WifiStateIsConnected(const std::optional<WifiState> &state) const {
+    if (!state.has_value()) {
+        return false;
+    }
+    return state->interface_present && state->operstate == "up" && state->carrier == 1;
+}
+
+void ChimeService::PlayNotification(NotificationSoundType type) {
+    if (!config_.audio_enabled) {
+        return;
+    }
+
+    if (type == NotificationSoundType::kSuccess) {
+        audio_player_.Play(config_.notification_success_sound_path, config_.volume_notifications);
+        return;
+    }
+
+    audio_player_.Play(config_.notification_failure_sound_path, config_.volume_notifications);
+}
+
 void ChimeService::LogWifiState(const WifiState &state) const {
     if (!state.interface_present) {
         logger_.Warn("wifi", "interface '" + config_.wifi_interface + "' not found");
@@ -377,7 +468,7 @@ void ChimeService::LogWifiState(const WifiState &state) const {
         message += " carrier=" + std::to_string(state.carrier);
     }
 
-    if (state.operstate == "up" && state.carrier != 0) {
+    if (state.operstate == "up" && state.carrier == 1) {
         logger_.Info("wifi", message);
     } else {
         logger_.Warn("wifi", message + " (connectivity degraded)");
