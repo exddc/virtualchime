@@ -448,16 +448,26 @@ std::vector<ValidationError> ConfigStore::ValidateRequest(
     errors.push_back({"ring_topic", "ring_topic is invalid"});
   }
 
-  if (request.config.notification_success_sound_path.empty() ||
-      request.config.notification_success_sound_path.size() > 256) {
-    errors.push_back({"notification_success_sound_path",
-                      "notification_success_sound_path must be 1-256 chars"});
-  }
-  if (request.config.notification_failure_sound_path.empty() ||
-      request.config.notification_failure_sound_path.size() > 256) {
-    errors.push_back({"notification_failure_sound_path",
-                      "notification_failure_sound_path must be 1-256 chars"});
-  }
+  const auto validate_sound_path = [&errors](const std::string& field_name,
+                                             const std::string& value) {
+    if (value.find('\n') != std::string::npos ||
+        value.find('\r') != std::string::npos) {
+      errors.push_back(
+          {field_name, field_name + " must not contain newline characters"});
+      return;
+    }
+
+    const std::string trimmed = vc::config::trim(value);
+    if (trimmed.empty() || trimmed.size() > 256) {
+      errors.push_back(
+          {field_name, field_name + " must be 1-256 chars after trimming"});
+    }
+  };
+
+  validate_sound_path("notification_success_sound_path",
+                      request.config.notification_success_sound_path);
+  validate_sound_path("notification_failure_sound_path",
+                      request.config.notification_failure_sound_path);
 
   if (request.config.volume_bell < 0 || request.config.volume_bell > 100) {
     errors.push_back({"volume_bell", "volume_bell must be 0-100"});

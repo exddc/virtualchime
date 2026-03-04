@@ -578,6 +578,7 @@
         <input
           id="notification_success_sound_path"
           bind:value={notificationSuccessSoundPath}
+          maxlength="256"
           placeholder="/usr/local/share/chime/test.wav"
         />
       </div>
@@ -586,6 +587,7 @@
         <input
           id="notification_failure_sound_path"
           bind:value={notificationFailureSoundPath}
+          maxlength="256"
           placeholder="/usr/local/share/chime/ring.wav"
         />
       </div>

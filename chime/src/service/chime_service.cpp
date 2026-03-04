@@ -154,6 +154,7 @@ int ChimeService::Run(vc::runtime::SignalHandler &signal_handler) {
     }
 
     bool startup_notification_played = false;
+    bool startup_notification_unknown_logged = false;
     const auto startup_begin = std::chrono::steady_clock::now();
 
     while (!signal_handler.ShouldStop()) {
@@ -195,30 +196,42 @@ int ChimeService::Run(vc::runtime::SignalHandler &signal_handler) {
             const auto wifi_elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last_wifi_check).count();
             if (wifi_elapsed >= config_.wifi_check_interval) {
                 const auto current_state = wifi_monitor_.ReadState(config_.wifi_interface);
-                if (current_state.has_value() && WifiStateChanged(last_wifi_state, *current_state)) {
-                    LogWifiState(*current_state);
+                if (current_state.has_value()) {
+                    if (WifiStateChanged(last_wifi_state, *current_state)) {
+                        LogWifiState(*current_state);
+                    }
                     last_wifi_state = current_state;
+                } else if (last_wifi_state.has_value()) {
+                    logger_.Warn("wifi", "state unavailable; connectivity unknown");
+                    last_wifi_state = std::nullopt;
                 }
                 last_wifi_check = now;
             }
         }
 
         if (!startup_notification_played) {
-            const bool wifi_connected = WifiStateIsConnected(last_wifi_state);
+            const bool wifi_state_known = last_wifi_state.has_value();
+            const bool wifi_connected = wifi_state_known && WifiStateIsConnected(last_wifi_state);
             const bool mqtt_connected = mqtt_connected_.load();
-            const auto startup_elapsed =
-                std::chrono::duration_cast<std::chrono::seconds>(now - startup_begin).count();
+            const auto startup_elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - startup_begin).count();
 
             if (wifi_connected && mqtt_connected) {
                 logger_.Info("audio", "startup checks passed (wifi + mqtt), playing success notification");
                 PlayNotification(NotificationSoundType::kSuccess);
                 startup_notification_played = true;
             } else if (startup_elapsed >= kStartupNotificationTimeoutSeconds) {
-                logger_.Warn("audio", "startup checks incomplete within " +
-                                         std::to_string(kStartupNotificationTimeoutSeconds) +
-                                         "s, playing failure notification");
-                PlayNotification(NotificationSoundType::kFailure);
-                startup_notification_played = true;
+                if (!wifi_state_known) {
+                    if (!startup_notification_unknown_logged) {
+                        logger_.Info("audio", "startup checks deferred: wifi state unknown");
+                        startup_notification_unknown_logged = true;
+                    }
+                } else {
+                    logger_.Warn("audio", "startup checks incomplete within " +
+                                             std::to_string(kStartupNotificationTimeoutSeconds) +
+                                             "s, playing failure notification");
+                    PlayNotification(NotificationSoundType::kFailure);
+                    startup_notification_played = true;
+                }
             }
         }
 
@@ -396,7 +409,7 @@ bool ChimeService::WifiStateIsConnected(const std::optional<WifiState> &state) c
     if (!state.has_value()) {
         return false;
     }
-    return state->interface_present && state->operstate == "up" && state->carrier != 0;
+    return state->interface_present && state->operstate == "up" && state->carrier == 1;
 }
 
 void ChimeService::PlayNotification(NotificationSoundType type) {
@@ -423,7 +436,7 @@ void ChimeService::LogWifiState(const WifiState &state) const {
         message += " carrier=" + std::to_string(state.carrier);
     }
 
-    if (state.operstate == "up" && state.carrier != 0) {
+    if (state.operstate == "up" && state.carrier == 1) {
         logger_.Info("wifi", message);
     } else {
         logger_.Warn("wifi", message + " (connectivity degraded)");
