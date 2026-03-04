@@ -23,6 +23,7 @@ constexpr int kMqttLoopTimeoutMs = 100;
 constexpr int kReconnectDelaySeconds = 1;
 constexpr int kHealthLogIntervalSeconds = 60;
 constexpr int kStartupNotificationTimeoutSeconds = 10;
+constexpr int kStartupUnknownWifiTimeoutSeconds = 30;
 constexpr std::time_t kMinimumSaneEpoch = 1704067200;
 constexpr std::size_t kMaxPayloadLogBytes = 256;
 constexpr std::size_t kMaxObservedTopics = 256;
@@ -155,6 +156,7 @@ int ChimeService::Run(vc::runtime::SignalHandler &signal_handler) {
 
     bool startup_notification_played = false;
     bool startup_notification_unknown_logged = false;
+    std::optional<std::chrono::steady_clock::time_point> startup_unknown_wifi_begin;
     const auto startup_begin = std::chrono::steady_clock::now();
 
     while (!signal_handler.ShouldStop()) {
@@ -224,8 +226,22 @@ int ChimeService::Run(vc::runtime::SignalHandler &signal_handler) {
                     if (!startup_notification_unknown_logged) {
                         logger_.Info("audio", "startup checks deferred: wifi state unknown");
                         startup_notification_unknown_logged = true;
+                        startup_unknown_wifi_begin = now;
+                    }
+
+                    if (startup_unknown_wifi_begin.has_value()) {
+                        const auto unknown_wifi_elapsed =
+                            std::chrono::duration_cast<std::chrono::seconds>(now - *startup_unknown_wifi_begin).count();
+                        if (unknown_wifi_elapsed >= kStartupUnknownWifiTimeoutSeconds) {
+                            logger_.Warn("audio", "startup wifi state remained unknown for " +
+                                                     std::to_string(kStartupUnknownWifiTimeoutSeconds) +
+                                                     "s after startup timeout, playing failure notification");
+                            PlayNotification(NotificationSoundType::kFailure);
+                            startup_notification_played = true;
+                        }
                     }
                 } else {
+                    startup_unknown_wifi_begin = std::nullopt;
                     logger_.Warn("audio", "startup checks incomplete within " +
                                              std::to_string(kStartupNotificationTimeoutSeconds) +
                                              "s, playing failure notification");
