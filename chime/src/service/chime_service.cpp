@@ -161,7 +161,8 @@ int ChimeService::Run(vc::runtime::SignalHandler &signal_handler) {
         logger_.Info("wifi", "periodic monitor disabled by config");
     }
 
-    bool startup_notification_played = false;
+    const bool startup_notifications_enabled = config_.audio_enabled;
+    bool startup_notification_played = !startup_notifications_enabled;
     bool startup_notification_unknown_logged = false;
     std::optional<std::chrono::steady_clock::time_point> startup_unknown_wifi_begin;
     const auto startup_begin = std::chrono::steady_clock::now();
