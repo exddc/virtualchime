@@ -219,10 +219,10 @@ run_biome() {
 
   pushd "$PROJECT_DIR/webui" >/dev/null
   if [ "$FIX_FORMAT" = "1" ]; then
-    bunx --bun @biomejs/biome check --write "${files[@]/#webui\//}"
+    bunx --bun @biomejs/biome check --write --no-errors-on-unmatched "${files[@]/#webui\//}"
     log "Applied biome formatting/lint fixes"
   else
-    bunx --bun @biomejs/biome check "${files[@]/#webui\//}"
+    bunx --bun @biomejs/biome check --no-errors-on-unmatched "${files[@]/#webui\//}"
     log "biome check passed"
   fi
   popd >/dev/null
