@@ -8,13 +8,16 @@ IMAGE_NAME="virtualchime-builder"
 VOLUME_NAME="virtualchime-buildroot-cache"
 OUTPUT_DIR="$PROJECT_DIR/buildroot/output"
 APP_VERSION_FILE="$PROJECT_DIR/chime/VERSION"
+OS_VERSION_FILE="$PROJECT_DIR/buildroot/version.env"
 CONFIG_FILE="$PROJECT_DIR/buildroot/board/raspberrypi0w/rootfs_overlay/etc/chime.conf"
 WEBUI_DIST_DIR="$PROJECT_DIR/webui/dist"
 CHIME_BINARY="$OUTPUT_DIR/chime"
 WEBD_BINARY="$OUTPUT_DIR/chime-webd"
+ROOTFS_IMAGE="$OUTPUT_DIR/rootfs.ext4"
 BUILDROOT_VERSION="${BUILDROOT_VERSION:-2024.02.1}"
 BUILD_META_SCRIPT="$SCRIPT_DIR/write_build_meta.sh"
 LOCAL_CHIME_SCRIPT="$SCRIPT_DIR/local_chime.sh"
+OTA_SCRIPT_DIR="$PROJECT_DIR/buildroot/board/raspberrypi0w/rootfs_overlay/usr/local/sbin"
 
 SSH_USER="root"
 SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=10"
@@ -22,6 +25,8 @@ REMOTE_BINARY_PATH="/usr/local/bin/chime"
 REMOTE_WEBD_BINARY_PATH="/usr/local/bin/chime-webd"
 REMOTE_BINARY_STAGING_PATH="/usr/local/bin/.chime.new"
 REMOTE_WEBD_BINARY_STAGING_PATH="/usr/local/bin/.chime-webd.new"
+REMOTE_BINARY_PREV_PATH="/usr/local/bin/.chime.prev"
+REMOTE_WEBD_BINARY_PREV_PATH="/usr/local/bin/.chime-webd.prev"
 REMOTE_WEBD_UI_ROOT="/usr/local/share/chime-web-ui"
 REMOTE_WEBD_UI_DIST_PATH="$REMOTE_WEBD_UI_ROOT/dist"
 REMOTE_CONFIG_PATH="/etc/chime.conf"
@@ -33,13 +38,19 @@ usage() {
     cat <<EOF
 Usage:
   $0 chime <pi-ip-or-hostname> [--binary <path>] [--no-build] [--with-webd]
+  $0 firmware <pi-ip-or-hostname> [--image <path>] [--version <semver>] [--no-reboot] [--wait-online]
+  $0 firmware-rollback <pi-ip-or-hostname> [--slot A|B]
+  $0 ota-status <pi-ip-or-hostname>
   $0 config <pi-ip-or-hostname>
   $0 version <pi-ip-or-hostname>
 
 Commands:
-  chime    Build (by default) and deploy chime binary
-  config   Deploy chime.conf and restart service
-  version  Show OS/app/kernel/binary version info on device
+  chime             Build (by default) and deploy chime binary
+  firmware          Deploy rootfs image to inactive slot using ota-install
+  firmware-rollback Roll back next boot slot via ota-rollback
+  ota-status        Show OTA pending/status files and current root slot
+  config            Deploy chime.conf and restart service
+  version           Show OS/app/kernel/binary version info on device
 EOF
 }
 
@@ -55,6 +66,18 @@ Options:
 EOF
 }
 
+usage_firmware() {
+    cat <<EOF
+Usage: $0 firmware <pi-ip-or-hostname> [--image <path>] [--version <semver>] [--no-reboot] [--wait-online]
+
+Options:
+  --image <path>    Rootfs image to deploy (default: $ROOTFS_IMAGE)
+  --version <v>     Override firmware version in manifest (default: VIRTUALCHIME_OS_VERSION)
+  --no-reboot       Stage update without reboot
+  --wait-online     After reboot, wait for device to come back online and show ota-status
+EOF
+}
+
 require_host() {
     local host="${1:-}"
     [ -n "$host" ] || error "Missing Pi host. Example: $0 chime 192.168.1.100"
@@ -66,6 +89,14 @@ read_app_version() {
     app_version="$(head -n 1 "$APP_VERSION_FILE" | tr -d '[:space:]')"
     [ -n "$app_version" ] || error "App version is empty in $APP_VERSION_FILE"
     printf '%s\n' "$app_version"
+}
+
+read_os_version() {
+    [ -f "$OS_VERSION_FILE" ] || error "OS version file not found at $OS_VERSION_FILE"
+    local os_version
+    os_version="$(sed -n 's/^VIRTUALCHIME_OS_VERSION=//p' "$OS_VERSION_FILE" | head -n 1 | tr -d '[:space:]')"
+    [ -n "$os_version" ] || error "VIRTUALCHIME_OS_VERSION is empty in $OS_VERSION_FILE"
+    printf '%s\n' "$os_version"
 }
 
 write_build_metadata() {
@@ -160,9 +191,16 @@ deploy_binary_to_pi() {
     log "Stopping chime service..."
     ssh $SSH_OPTS "$SSH_USER@$host" "/etc/init.d/S99chime stop" || true
 
-    log "Copying binary (atomic replace)..."
+    log "Copying binary (atomic replace with rollback backup)..."
     scp -O $SSH_OPTS "$binary_path" "$SSH_USER@$host:$REMOTE_BINARY_STAGING_PATH"
-    ssh $SSH_OPTS "$SSH_USER@$host" "chmod +x $REMOTE_BINARY_STAGING_PATH && mv -f $REMOTE_BINARY_STAGING_PATH $REMOTE_BINARY_PATH"
+    ssh $SSH_OPTS "$SSH_USER@$host" "
+set -e
+chmod +x $REMOTE_BINARY_STAGING_PATH
+if [ -f $REMOTE_BINARY_PATH ]; then
+    cp $REMOTE_BINARY_PATH $REMOTE_BINARY_PREV_PATH
+fi
+mv -f $REMOTE_BINARY_STAGING_PATH $REMOTE_BINARY_PATH
+"
     ssh $SSH_OPTS "$SSH_USER@$host" "printf '%s\n' '$app_version' > /etc/chime-app-version"
 
     log "Starting chime service..."
@@ -170,7 +208,20 @@ deploy_binary_to_pi() {
 
     sleep 2
     log "Service status:"
-    ssh $SSH_OPTS "$SSH_USER@$host" "/etc/init.d/S99chime status"
+    local status_output
+    status_output="$(ssh $SSH_OPTS "$SSH_USER@$host" "/etc/init.d/S99chime status || true")"
+    printf '%s\n' "$status_output"
+    if ! printf '%s\n' "$status_output" | grep -q "supervisor is running"; then
+        log "Service failed health check, rolling back binary..."
+        ssh $SSH_OPTS "$SSH_USER@$host" "
+set -e
+if [ -f $REMOTE_BINARY_PREV_PATH ]; then
+    cp $REMOTE_BINARY_PREV_PATH $REMOTE_BINARY_PATH
+fi
+/etc/init.d/S99chime restart
+"
+        error "Deployment rolled back because chime service did not become healthy"
+    fi
 
     log "Installed version:"
     ssh $SSH_OPTS "$SSH_USER@$host" "$REMOTE_BINARY_PATH --version || true"
@@ -186,9 +237,16 @@ deploy_webd_to_pi() {
     log "Stopping web service..."
     ssh $SSH_OPTS "$SSH_USER@$host" "/etc/init.d/S45webd stop" || true
 
-    log "Copying web binary (atomic replace)..."
+    log "Copying web binary (atomic replace with rollback backup)..."
     scp -O $SSH_OPTS "$binary_path" "$SSH_USER@$host:$REMOTE_WEBD_BINARY_STAGING_PATH"
-    ssh $SSH_OPTS "$SSH_USER@$host" "chmod +x $REMOTE_WEBD_BINARY_STAGING_PATH && mv -f $REMOTE_WEBD_BINARY_STAGING_PATH $REMOTE_WEBD_BINARY_PATH"
+    ssh $SSH_OPTS "$SSH_USER@$host" "
+set -e
+chmod +x $REMOTE_WEBD_BINARY_STAGING_PATH
+if [ -f $REMOTE_WEBD_BINARY_PATH ]; then
+    cp $REMOTE_WEBD_BINARY_PATH $REMOTE_WEBD_BINARY_PREV_PATH
+fi
+mv -f $REMOTE_WEBD_BINARY_STAGING_PATH $REMOTE_WEBD_BINARY_PATH
+"
 
     if [ -d "$WEBUI_DIST_DIR" ]; then
         log "Deploying web UI assets from $WEBUI_DIST_DIR..."
@@ -205,7 +263,20 @@ deploy_webd_to_pi() {
 
     sleep 2
     log "Web service status:"
-    ssh $SSH_OPTS "$SSH_USER@$host" "/etc/init.d/S45webd status"
+    local web_status_output
+    web_status_output="$(ssh $SSH_OPTS "$SSH_USER@$host" "/etc/init.d/S45webd status || true")"
+    printf '%s\n' "$web_status_output"
+    if ! printf '%s\n' "$web_status_output" | grep -q "supervisor is running"; then
+        log "Web service failed health check, rolling back webd binary..."
+        ssh $SSH_OPTS "$SSH_USER@$host" "
+set -e
+if [ -f $REMOTE_WEBD_BINARY_PREV_PATH ]; then
+    cp $REMOTE_WEBD_BINARY_PREV_PATH $REMOTE_WEBD_BINARY_PATH
+fi
+/etc/init.d/S45webd restart
+"
+        error "Deployment rolled back because web service did not become healthy"
+    fi
 }
 
 build_webui_assets() {
@@ -213,6 +284,175 @@ build_webui_assets() {
     log "Building web UI assets..."
     bash "$LOCAL_CHIME_SCRIPT" webui-build || error "Unable to run $LOCAL_CHIME_SCRIPT via bash for webui-build"
     [ -d "$WEBUI_DIST_DIR" ] || error "Web UI build completed but dist directory missing at $WEBUI_DIST_DIR"
+}
+
+sha256_file() {
+    local file_path="$1"
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$file_path" | awk '{print $1}'
+    elif command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$file_path" | awk '{print $1}'
+    else
+        error "Neither sha256sum nor shasum is available"
+    fi
+}
+
+wait_for_ssh() {
+    local host="$1"
+    local timeout_seconds="${2:-120}"
+    local elapsed=0
+
+    while [ "$elapsed" -lt "$timeout_seconds" ]; do
+        if ssh $SSH_OPTS "$SSH_USER@$host" "echo online" >/dev/null 2>&1; then
+            return 0
+        fi
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+    return 1
+}
+
+sync_ota_scripts_to_pi() {
+    local host="$1"
+    [ -d "$OTA_SCRIPT_DIR" ] || error "OTA script directory missing: $OTA_SCRIPT_DIR"
+    for script_name in ota-common.sh ota-install ota-confirm ota-rollback; do
+        [ -f "$OTA_SCRIPT_DIR/$script_name" ] || error "Missing local OTA script: $OTA_SCRIPT_DIR/$script_name"
+        scp -O $SSH_OPTS "$OTA_SCRIPT_DIR/$script_name" "$SSH_USER@$host:/usr/local/sbin/$script_name"
+    done
+    ssh $SSH_OPTS "$SSH_USER@$host" "chmod +x /usr/local/sbin/ota-common.sh /usr/local/sbin/ota-install /usr/local/sbin/ota-confirm /usr/local/sbin/ota-rollback"
+}
+
+cmd_firmware() {
+    if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+        usage_firmware
+        exit 0
+    fi
+
+    local host="${1:-}"
+    shift || true
+    require_host "$host"
+
+    local image_path="$ROOTFS_IMAGE"
+    local fw_version=""
+    local no_reboot=0
+    local wait_online=0
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --image)
+                [ $# -ge 2 ] || error "--image requires a path"
+                image_path="$2"
+                shift 2
+                ;;
+            --version)
+                [ $# -ge 2 ] || error "--version requires a value"
+                fw_version="$2"
+                shift 2
+                ;;
+            --no-reboot)
+                no_reboot=1
+                shift
+                ;;
+            --wait-online)
+                wait_online=1
+                shift
+                ;;
+            -h|--help)
+                usage_firmware
+                exit 0
+                ;;
+            *)
+                error "Unknown option for firmware: $1"
+                ;;
+        esac
+    done
+
+    [ -f "$image_path" ] || error "Firmware image not found at $image_path"
+    if [ -z "$fw_version" ]; then
+        fw_version="$(read_os_version)"
+    fi
+    local image_sha256
+    local image_size_bytes
+    image_sha256="$(sha256_file "$image_path")"
+    image_size_bytes="$(wc -c < "$image_path" | tr -d '[:space:]')"
+    [ -n "$image_sha256" ] || error "Failed to compute sha256 for $image_path"
+    [ -n "$image_size_bytes" ] || error "Failed to compute size for $image_path"
+
+    log "Syncing OTA scripts to $host..."
+    sync_ota_scripts_to_pi "$host"
+
+    log "Streaming rootfs image to inactive slot on $host..."
+    cat "$image_path" | ssh $SSH_OPTS "$SSH_USER@$host" \
+        "/usr/local/sbin/ota-install --image - --size-bytes $image_size_bytes --sha256 $image_sha256 --version $fw_version --no-reboot"
+
+    if [ "$no_reboot" -eq 0 ]; then
+        log "Rebooting device into updated slot..."
+        ssh $SSH_OPTS "$SSH_USER@$host" "reboot -f" || true
+    fi
+
+    if [ "$no_reboot" -eq 0 ] && [ "$wait_online" -eq 1 ]; then
+        sleep 3
+        log "Waiting for device to come back online..."
+        if ! wait_for_ssh "$host" 180; then
+            error "Device did not return over SSH within timeout after reboot"
+        fi
+        log "Confirming OTA health on device..."
+        ssh $SSH_OPTS "$SSH_USER@$host" "/usr/local/sbin/ota-confirm || true"
+        log "Device is back online. OTA status:"
+        cmd_ota_status "$host"
+    fi
+}
+
+cmd_firmware_rollback() {
+    local host="${1:-}"
+    shift || true
+    require_host "$host"
+
+    local slot=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --slot)
+                [ $# -ge 2 ] || error "--slot requires A or B"
+                slot="$2"
+                shift 2
+                ;;
+            *)
+                error "Unknown option for firmware-rollback: $1"
+                ;;
+        esac
+    done
+
+    local rollback_cmd="/usr/local/sbin/ota-rollback"
+    if [ -n "$slot" ]; then
+        rollback_cmd="$rollback_cmd --slot $slot"
+    fi
+    log "Triggering firmware rollback on $host..."
+    ssh $SSH_OPTS "$SSH_USER@$host" "$rollback_cmd"
+}
+
+cmd_ota_status() {
+    local host="${1:-}"
+    require_host "$host"
+
+    ssh $SSH_OPTS "$SSH_USER@$host" '
+echo "=== current root ==="
+awk "{print}" /proc/cmdline
+
+echo
+echo "=== /data/ota/status.env ==="
+if [ -f /data/ota/status.env ]; then
+    cat /data/ota/status.env
+else
+    echo "missing"
+fi
+
+echo
+echo "=== /data/ota/pending.env ==="
+if [ -f /data/ota/pending.env ]; then
+    cat /data/ota/pending.env
+else
+    echo "missing"
+fi
+'
 }
 
 cmd_chime() {
@@ -353,6 +593,18 @@ main() {
         chime)
             shift
             cmd_chime "$@"
+            ;;
+        firmware)
+            shift
+            cmd_firmware "$@"
+            ;;
+        firmware-rollback)
+            shift
+            cmd_firmware_rollback "$@"
+            ;;
+        ota-status)
+            shift
+            cmd_ota_status "$@"
             ;;
         config)
             shift

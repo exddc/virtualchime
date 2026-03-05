@@ -226,6 +226,9 @@ step_done "make" "$build_start"
 
 if [ -f "output/images/sdcard.img" ]; then
     cp output/images/sdcard.img /home/builder/work/
+    if [ -f "output/images/rootfs.ext4" ]; then
+        cp output/images/rootfs.ext4 /home/builder/work/
+    fi
     echo "[build] SUCCESS! Image ready."
 else
     echo "[build] Build finished but sdcard.img not found"
@@ -239,7 +242,7 @@ fi
     docker run --rm \
         -v "$VOLUME_NAME:/work:ro" \
         -v "$OUTPUT_DIR:/out" \
-        alpine sh -c "if [ -f /work/sdcard.img ]; then cp /work/sdcard.img /out/ && echo 'Done'; else echo 'ERROR: Image not found in Docker volume' >&2; exit 1; fi"
+        alpine sh -c "if [ -f /work/sdcard.img ]; then cp /work/sdcard.img /out/; else echo 'ERROR: sdcard.img not found in Docker volume' >&2; exit 1; fi; if [ -f /work/rootfs.ext4 ]; then cp /work/rootfs.ext4 /out/; fi; echo 'Done'"
     log_timing "export" "$(elapsed "$export_start")"
 }
 
@@ -248,6 +251,7 @@ print_success_summary() {
 
 [docker-build] SUCCESS
 Image: $IMAGE_PATH
+Rootfs: $OUTPUT_DIR/rootfs.ext4
 
 Next:
   1) Flash SD card:

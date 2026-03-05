@@ -1,0 +1,122 @@
+#!/bin/sh
+set -eu
+
+. /usr/local/sbin/ota-common.sh
+
+usage() {
+    cat <<EOF
+Usage: ota-install --image <rootfs.ext4|-> --sha256 <hex> --version <os-version> [--size-bytes <n>] [--no-reboot]
+EOF
+}
+
+IMAGE_PATH=""
+EXPECTED_SHA256=""
+FW_VERSION=""
+IMAGE_SIZE_BYTES=""
+NO_REBOOT=0
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --image)
+            [ $# -ge 2 ] || { usage; exit 1; }
+            IMAGE_PATH="$2"
+            shift 2
+            ;;
+        --sha256)
+            [ $# -ge 2 ] || { usage; exit 1; }
+            EXPECTED_SHA256="$2"
+            shift 2
+            ;;
+        --version)
+            [ $# -ge 2 ] || { usage; exit 1; }
+            FW_VERSION="$2"
+            shift 2
+            ;;
+        --size-bytes)
+            [ $# -ge 2 ] || { usage; exit 1; }
+            IMAGE_SIZE_BYTES="$2"
+            shift 2
+            ;;
+        --no-reboot)
+            NO_REBOOT=1
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            ota_log "unknown argument: $1"
+            usage
+            exit 1
+            ;;
+    esac
+done
+
+[ -n "$IMAGE_PATH" ] || { ota_log "missing --image"; exit 1; }
+[ -n "$EXPECTED_SHA256" ] || { ota_log "missing --sha256"; exit 1; }
+[ -n "$FW_VERSION" ] || { ota_log "missing --version"; exit 1; }
+if [ "$IMAGE_PATH" != "-" ]; then
+    [ -f "$IMAGE_PATH" ] || { ota_log "image not found: $IMAGE_PATH"; exit 1; }
+fi
+
+ensure_ota_dirs
+mount_boot_if_needed
+
+if ! command -v sha256sum >/dev/null 2>&1; then
+    ota_log "sha256sum not available"
+    exit 1
+fi
+
+CURRENT_SLOT="$(current_slot)"
+TARGET_SLOT="$(inactive_slot)"
+TARGET_DEVICE="$(device_from_slot "$TARGET_SLOT")"
+PREVIOUS_SLOT="$CURRENT_SLOT"
+if [ -z "$PREVIOUS_SLOT" ]; then
+    PREVIOUS_SLOT="A"
+fi
+
+ota_log "writing firmware to inactive slot $TARGET_SLOT ($TARGET_DEVICE)"
+if [ "$IMAGE_PATH" = "-" ]; then
+    [ -n "$IMAGE_SIZE_BYTES" ] || { ota_log "--size-bytes is required with --image -"; exit 1; }
+    case "$IMAGE_SIZE_BYTES" in
+        ''|*[!0-9]*)
+            ota_log "invalid --size-bytes: $IMAGE_SIZE_BYTES"
+            exit 1
+            ;;
+    esac
+    dd of="$TARGET_DEVICE" bs=4M conv=fsync status=none
+else
+    IMAGE_SIZE_BYTES="$(wc -c < "$IMAGE_PATH" | tr -d '[:space:]')"
+    ACTUAL_SHA256="$(sha256sum "$IMAGE_PATH" | awk '{print $1}')"
+    if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
+        ota_log "sha256 mismatch expected=$EXPECTED_SHA256 actual=$ACTUAL_SHA256"
+        set_env_kv "$OTA_STATUS_FILE" LAST_RESULT "verify_failed"
+        set_env_kv "$OTA_STATUS_FILE" LAST_ERROR "sha256_mismatch"
+        exit 1
+    fi
+    dd if="$IMAGE_PATH" of="$TARGET_DEVICE" bs=4M conv=fsync status=none
+fi
+sync
+
+# Verify target partition bytes match expected SHA256.
+ACTUAL_TARGET_SHA256="$(head -c "$IMAGE_SIZE_BYTES" "$TARGET_DEVICE" | sha256sum | awk '{print $1}')"
+if [ "$ACTUAL_TARGET_SHA256" != "$EXPECTED_SHA256" ]; then
+    ota_log "target sha256 mismatch expected=$EXPECTED_SHA256 actual=$ACTUAL_TARGET_SHA256"
+    set_env_kv "$OTA_STATUS_FILE" LAST_RESULT "verify_failed_after_write"
+    set_env_kv "$OTA_STATUS_FILE" LAST_ERROR "target_sha256_mismatch"
+    exit 1
+fi
+
+write_pending_state "$TARGET_SLOT" "$PREVIOUS_SLOT" "$FW_VERSION" "$EXPECTED_SHA256" "$(utc_now)" "$OTA_MAX_ATTEMPTS"
+set_env_kv "$OTA_STATUS_FILE" LAST_RESULT "install_staged"
+set_env_kv "$OTA_STATUS_FILE" CURRENT_SLOT "$CURRENT_SLOT"
+set_env_kv "$OTA_STATUS_FILE" LAST_FW_VERSION "$FW_VERSION"
+
+set_next_root_device "$TARGET_DEVICE"
+ota_log "next boot root set to $TARGET_DEVICE"
+
+if [ "$NO_REBOOT" -eq 0 ]; then
+    ota_log "rebooting into slot $TARGET_SLOT"
+    reboot -f
+fi

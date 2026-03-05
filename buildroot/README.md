@@ -34,8 +34,8 @@ chime/VERSION
 
 `buildroot/version.env`
 ```bash
-VIRTUALCHIME_OS_VERSION=0.1.0
-CHIME_CONFIG_VERSION=1
+VIRTUALCHIME_OS_VERSION=0.2.0
+CHIME_CONFIG_VERSION=3
 ```
 
 `chime/VERSION`
@@ -81,13 +81,15 @@ Uses Docker to avoid host dependencies. Build artifacts stored in a Docker volum
 Image layout sizing:
 
 - Boot partition: `128M` (`board/raspberrypi0w/genimage.cfg`).
-- Root filesystem image: `256M` (`configs/virtualchime_rpi0w_defconfig`).
+- Root filesystem A: `256M` (`configs/virtualchime_rpi0w_defconfig` output).
+- Root filesystem B: `256M` (same image, inactive update slot).
+- Data partition: `256M` (persistent state and OTA metadata).
 
-That means the generated image is about 384 MB plus partition-table/alignment overhead.
+That means the generated image is about 896 MB plus partition-table/alignment overhead.
 Practical guidance:
 
 - Absolute minimum card size: **1 GB**
-- Recommended minimum for reliability/availability: **1 GB**
+- Recommended minimum for reliability/availability: **2 GB**
 
 ### Docker resource settings (recommended)
 
@@ -111,6 +113,24 @@ For app-only changes (`chime/` or `common/`), use:
 
 ```bash
 ./scripts/deploy.sh chime <pi-ip>
+```
+
+For OTA firmware slot updates (inactive rootfs write + reboot), use:
+
+```bash
+./scripts/deploy.sh firmware <pi-ip> --wait-online
+```
+
+Check OTA state and pending/confirmed status:
+
+```bash
+./scripts/deploy.sh ota-status <pi-ip>
+```
+
+Force rollback target slot for next boot:
+
+```bash
+./scripts/deploy.sh firmware-rollback <pi-ip> --slot A
 ```
 
 Deploy configuration-only changes with:
@@ -148,11 +168,14 @@ SKIP_IMAGE_BUILD=1 ./scripts/docker_build.sh
 | Path | Purpose |
 |------|---------|
 | `etc/init.d/S30modules` | Decompresses WiFi modules, runs depmod, loads brcmfmac |
+| `etc/init.d/S31persistent` | Binds persisted config/data from `/data` into runtime paths |
 | `etc/init.d/S40network` | Starts wpa_supplicant and DHCP |
+| `etc/init.d/S42otaguard` | Tracks pending OTA boot attempts and triggers rollback when exhausted |
 | `etc/init.d/S45webd` | Chime HTTPS web daemon supervisor (`chime-webd`) |
 | `etc/init.d/S41timesync` | Syncs system clock from NTP and keeps periodic resync running |
 | `etc/init.d/S50dropbear` | SSH daemon (key-only auth) |
 | `etc/init.d/S99chime` | Chime application with auto-restart and log rotation |
+| `etc/init.d/S99otaconfirm` | Confirms pending OTA update when `chime` + `chime-webd` are healthy |
 | `etc/wpa_supplicant/wpa_supplicant.conf` | WiFi credentials (gitignored) |
 | `etc/chime-web/tls` | `chime-webd` self-signed TLS certificate and private key |
 | `etc/inittab` | Getty on ttyS0 for serial console |

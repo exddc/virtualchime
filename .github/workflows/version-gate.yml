@@ -1,0 +1,24 @@
+name: Version Gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  version-bump-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate version bump policy
+        run: |
+          set -euo pipefail
+          base_sha="${{ github.event.pull_request.base.sha }}"
+          if [ -z "${base_sha}" ]; then
+            echo "No pull request base SHA available; skipping."
+            exit 0
+          fi
+          bash ./scripts/check_version_bump.sh "${base_sha}" HEAD
