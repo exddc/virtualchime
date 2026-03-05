@@ -88,8 +88,8 @@ Image layout sizing:
 That means the generated image is about 896 MB plus partition-table/alignment overhead.
 Practical guidance:
 
-- Absolute minimum card size: **1 GB**
-- Recommended minimum for reliability/availability: **2 GB**
+- Absolute minimum card size: **2 GB**
+- Recommended card size for reliability/availability: **4 GB**
 
 ### Docker resource settings (recommended)
 
