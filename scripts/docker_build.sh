@@ -242,16 +242,34 @@ fi
     docker run --rm \
         -v "$VOLUME_NAME:/work:ro" \
         -v "$OUTPUT_DIR:/out" \
-        alpine sh -c "if [ -f /work/sdcard.img ]; then cp /work/sdcard.img /out/; else echo 'ERROR: sdcard.img not found in Docker volume' >&2; exit 1; fi; if [ -f /work/rootfs.ext4 ]; then cp /work/rootfs.ext4 /out/; fi; echo 'Done'"
+        alpine sh -eu -c '
+if [ ! -f /work/sdcard.img ]; then
+    echo "ERROR: sdcard.img not found in Docker volume" >&2
+    exit 1
+fi
+cp /work/sdcard.img /out/
+if [ -f /work/rootfs.ext4 ]; then
+    cp /work/rootfs.ext4 /out/
+fi
+echo "Done"
+'
     log_timing "export" "$(elapsed "$export_start")"
 }
 
 print_success_summary() {
+    local rootfs_path="$OUTPUT_DIR/rootfs.ext4"
+    local rootfs_summary
+    if [ -f "$rootfs_path" ]; then
+        rootfs_summary="Rootfs: $rootfs_path"
+    else
+        rootfs_summary="Rootfs: missing ($rootfs_path)"
+    fi
+
     cat <<EOF
 
 [docker-build] SUCCESS
 Image: $IMAGE_PATH
-Rootfs: $OUTPUT_DIR/rootfs.ext4
+$rootfs_summary
 
 Next:
   1) Flash SD card:

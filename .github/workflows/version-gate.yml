@@ -3,6 +3,15 @@ name: Version Gate
 on:
   pull_request:
   workflow_dispatch:
+    inputs:
+      base_ref:
+        description: "Base git ref/sha to compare from (for manual runs)"
+        required: false
+        default: "origin/main"
+      head_ref:
+        description: "Head git ref/sha to compare to (for manual runs)"
+        required: false
+        default: "HEAD"
 
 jobs:
   version-bump-check:
@@ -16,9 +25,17 @@ jobs:
       - name: Validate version bump policy
         run: |
           set -euo pipefail
-          base_sha="${{ github.event.pull_request.base.sha }}"
-          if [ -z "${base_sha}" ]; then
-            echo "No pull request base SHA available; skipping."
-            exit 0
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            base_ref="${{ github.event.inputs.base_ref }}"
+            head_ref="${{ github.event.inputs.head_ref }}"
+          else
+            base_ref="${{ github.event.pull_request.base.sha }}"
+            head_ref="${{ github.event.pull_request.head.sha }}"
           fi
-          bash ./scripts/check_version_bump.sh "${base_sha}" HEAD
+
+          if [ -z "${base_ref}" ] || [ -z "${head_ref}" ]; then
+            echo "Missing base/head refs for version check" >&2
+            exit 1
+          fi
+
+          bash ./scripts/check_version_bump.sh "${base_ref}" "${head_ref}"

@@ -99,6 +99,21 @@ read_os_version() {
     printf '%s\n' "$os_version"
 }
 
+is_semver_like() {
+    local value="${1:-}"
+    [[ "$value" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
+}
+
+require_slot_name() {
+    local slot_value="${1:-}"
+    case "$slot_value" in
+        A|B) ;;
+        *)
+            error "Invalid slot '$slot_value' (expected A or B)"
+            ;;
+    esac
+}
+
 write_build_metadata() {
     [ -x "$BUILD_META_SCRIPT" ] || error "Build metadata script not found at $BUILD_META_SCRIPT"
     "$BUILD_META_SCRIPT"
@@ -211,7 +226,7 @@ mv -f $REMOTE_BINARY_STAGING_PATH $REMOTE_BINARY_PATH
     local status_output
     status_output="$(ssh $SSH_OPTS "$SSH_USER@$host" "/etc/init.d/S99chime status || true")"
     printf '%s\n' "$status_output"
-    if ! printf '%s\n' "$status_output" | grep -q "supervisor is running"; then
+    if ! printf '%s\n' "$status_output" | grep -Eiq 'supervisor.*running|running.*supervisor'; then
         log "Service failed health check, rolling back binary..."
         ssh $SSH_OPTS "$SSH_USER@$host" "
 set -e
@@ -266,7 +281,7 @@ mv -f $REMOTE_WEBD_BINARY_STAGING_PATH $REMOTE_WEBD_BINARY_PATH
     local web_status_output
     web_status_output="$(ssh $SSH_OPTS "$SSH_USER@$host" "/etc/init.d/S45webd status || true")"
     printf '%s\n' "$web_status_output"
-    if ! printf '%s\n' "$web_status_output" | grep -q "supervisor is running"; then
+    if ! printf '%s\n' "$web_status_output" | grep -Eiq 'supervisor.*running|running.*supervisor'; then
         log "Web service failed health check, rolling back webd binary..."
         ssh $SSH_OPTS "$SSH_USER@$host" "
 set -e
@@ -366,9 +381,16 @@ cmd_firmware() {
         esac
     done
 
+    if [ "$no_reboot" -eq 1 ] && [ "$wait_online" -eq 1 ]; then
+        error "--wait-online cannot be combined with --no-reboot"
+    fi
+
     [ -f "$image_path" ] || error "Firmware image not found at $image_path"
     if [ -z "$fw_version" ]; then
         fw_version="$(read_os_version)"
+    fi
+    if ! is_semver_like "$fw_version"; then
+        error "Invalid firmware version '$fw_version' (expected SemVer like 1.2.3 or 1.2.3+build)"
     fi
     local image_sha256
     local image_size_bytes
@@ -376,13 +398,19 @@ cmd_firmware() {
     image_size_bytes="$(wc -c < "$image_path" | tr -d '[:space:]')"
     [ -n "$image_sha256" ] || error "Failed to compute sha256 for $image_path"
     [ -n "$image_size_bytes" ] || error "Failed to compute size for $image_path"
+    [[ "$image_sha256" =~ ^[0-9a-fA-F]{64}$ ]] || error "Invalid computed SHA256: $image_sha256"
+    [[ "$image_size_bytes" =~ ^[0-9]+$ ]] || error "Invalid image size: $image_size_bytes"
 
     log "Syncing OTA scripts to $host..."
     sync_ota_scripts_to_pi "$host"
 
     log "Streaming rootfs image to inactive slot on $host..."
-    cat "$image_path" | ssh $SSH_OPTS "$SSH_USER@$host" \
-        "/usr/local/sbin/ota-install --image - --size-bytes $image_size_bytes --sha256 $image_sha256 --version $fw_version --no-reboot"
+    local size_escaped sha_escaped version_escaped ota_cmd
+    printf -v size_escaped '%q' "$image_size_bytes"
+    printf -v sha_escaped '%q' "$image_sha256"
+    printf -v version_escaped '%q' "$fw_version"
+    ota_cmd="/usr/local/sbin/ota-install --image - --size-bytes ${size_escaped} --sha256 ${sha_escaped} --version ${version_escaped} --no-reboot"
+    cat "$image_path" | ssh $SSH_OPTS "$SSH_USER@$host" "$ota_cmd"
 
     if [ "$no_reboot" -eq 0 ]; then
         log "Rebooting device into updated slot..."
@@ -413,6 +441,7 @@ cmd_firmware_rollback() {
             --slot)
                 [ $# -ge 2 ] || error "--slot requires A or B"
                 slot="$2"
+                require_slot_name "$slot"
                 shift 2
                 ;;
             *)
@@ -423,7 +452,9 @@ cmd_firmware_rollback() {
 
     local rollback_cmd="/usr/local/sbin/ota-rollback"
     if [ -n "$slot" ]; then
-        rollback_cmd="$rollback_cmd --slot $slot"
+        local slot_escaped
+        printf -v slot_escaped '%q' "$slot"
+        rollback_cmd="$rollback_cmd --slot $slot_escaped"
     fi
     log "Triggering firmware rollback on $host..."
     ssh $SSH_OPTS "$SSH_USER@$host" "$rollback_cmd"

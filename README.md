@@ -52,8 +52,8 @@ The actual doorbell unit with camera, button, and MQTT integration. Currently in
 
 - [Chime README](chime/README.md) - Technical overview of the chime product
 - [Buildroot README](buildroot/README.md) - Image build, flash, and OTA workflow details
-- [Hardware README](hardware/chime/README.md) - Detailed writeup of the hardware designs
+- [Hardware README](hardware/chime/README.md) - Detailed write-up of the hardware designs
 
 ## License
 
-tbd.
+This project is licensed under the [MIT License](LICENSE).

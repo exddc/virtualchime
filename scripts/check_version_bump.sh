@@ -64,7 +64,7 @@ is_os_impacting_file() {
         buildroot/output/*|buildroot/dl/*)
             return 1
             ;;
-        buildroot/*.md|buildroot/**/*.md|buildroot/docs/*)
+        buildroot/*.md|buildroot/docs/*)
             return 1
             ;;
         buildroot/*)
