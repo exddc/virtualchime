@@ -101,7 +101,7 @@ read_os_version() {
 
 is_semver_like() {
     local value="${1:-}"
-    [[ "$value" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
+    [[ "$value" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]
 }
 
 require_slot_name() {
@@ -390,7 +390,7 @@ cmd_firmware() {
         fw_version="$(read_os_version)"
     fi
     if ! is_semver_like "$fw_version"; then
-        error "Invalid firmware version '$fw_version' (expected SemVer like 1.2.3 or 1.2.3+build)"
+        error "Invalid firmware version '$fw_version' (expected SemVer like 1.2.3, 1.2.3-rc1, or 1.2.3+build)"
     fi
     local image_sha256
     local image_size_bytes
@@ -414,7 +414,8 @@ cmd_firmware() {
 
     if [ "$no_reboot" -eq 0 ]; then
         log "Rebooting device into updated slot..."
-        ssh $SSH_OPTS "$SSH_USER@$host" "reboot -f" || true
+        ssh $SSH_OPTS "$SSH_USER@$host" "reboot" >/dev/null 2>&1 || \
+            ssh $SSH_OPTS "$SSH_USER@$host" "reboot -f" >/dev/null 2>&1 || true
     fi
 
     if [ "$no_reboot" -eq 0 ] && [ "$wait_online" -eq 1 ]; then

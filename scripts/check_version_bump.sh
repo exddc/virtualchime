@@ -13,27 +13,133 @@ error() { echo "[version-check] ERROR: $*" >&2; exit 1; }
 log() { echo "[version-check] $*"; }
 
 is_semver() {
-    [[ "${1:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+    [[ "${1:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?(\+[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]
 }
 
 is_integer() {
     [[ "${1:-}" =~ ^[0-9]+$ ]]
 }
 
-semver_gt() {
+semver_parse() {
+    local value="$1"
+    if [[ ! "$value" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?(\+([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?$ ]]; then
+        return 1
+    fi
+    local major="${BASH_REMATCH[1]}"
+    local minor="${BASH_REMATCH[2]}"
+    local patch="${BASH_REMATCH[3]}"
+    local prerelease="${BASH_REMATCH[5]:-}"
+    printf '%s %s %s %s\n' "$major" "$minor" "$patch" "$prerelease"
+}
+
+semver_compare_prerelease() {
     local lhs="$1"
     local rhs="$2"
-    local lmajor lminor lpatch
-    local rmajor rminor rpatch
-    IFS='.' read -r lmajor lminor lpatch <<< "$lhs"
-    IFS='.' read -r rmajor rminor rpatch <<< "$rhs"
 
-    if [ "$lmajor" -gt "$rmajor" ]; then return 0; fi
-    if [ "$lmajor" -lt "$rmajor" ]; then return 1; fi
-    if [ "$lminor" -gt "$rminor" ]; then return 0; fi
-    if [ "$lminor" -lt "$rminor" ]; then return 1; fi
-    if [ "$lpatch" -gt "$rpatch" ]; then return 0; fi
-    return 1
+    if [ -z "$lhs" ] && [ -z "$rhs" ]; then
+        echo 0
+        return
+    fi
+    if [ -z "$lhs" ]; then
+        echo 1
+        return
+    fi
+    if [ -z "$rhs" ]; then
+        echo -1
+        return
+    fi
+
+    local -a lparts rparts
+    local i li ri
+    IFS='.' read -r -a lparts <<< "$lhs"
+    IFS='.' read -r -a rparts <<< "$rhs"
+
+    for ((i = 0; i < ${#lparts[@]} || i < ${#rparts[@]}; i++)); do
+        li="${lparts[i]:-}"
+        ri="${rparts[i]:-}"
+
+        if [ -z "$li" ] && [ -z "$ri" ]; then
+            continue
+        fi
+        if [ -z "$li" ]; then
+            echo -1
+            return
+        fi
+        if [ -z "$ri" ]; then
+            echo 1
+            return
+        fi
+
+        if is_integer "$li" && is_integer "$ri"; then
+            if [ "$li" -gt "$ri" ]; then
+                echo 1
+                return
+            fi
+            if [ "$li" -lt "$ri" ]; then
+                echo -1
+                return
+            fi
+            continue
+        fi
+        if is_integer "$li" && ! is_integer "$ri"; then
+            echo -1
+            return
+        fi
+        if ! is_integer "$li" && is_integer "$ri"; then
+            echo 1
+            return
+        fi
+        if [[ "$li" > "$ri" ]]; then
+            echo 1
+            return
+        fi
+        if [[ "$li" < "$ri" ]]; then
+            echo -1
+            return
+        fi
+    done
+
+    echo 0
+}
+
+semver_compare() {
+    local lhs="$1"
+    local rhs="$2"
+    local lmajor lminor lpatch lpre
+    local rmajor rminor rpatch rpre
+    read -r lmajor lminor lpatch lpre <<< "$(semver_parse "$lhs")"
+    read -r rmajor rminor rpatch rpre <<< "$(semver_parse "$rhs")"
+
+    if [ "$lmajor" -gt "$rmajor" ]; then
+        echo 1
+        return
+    fi
+    if [ "$lmajor" -lt "$rmajor" ]; then
+        echo -1
+        return
+    fi
+    if [ "$lminor" -gt "$rminor" ]; then
+        echo 1
+        return
+    fi
+    if [ "$lminor" -lt "$rminor" ]; then
+        echo -1
+        return
+    fi
+    if [ "$lpatch" -gt "$rpatch" ]; then
+        echo 1
+        return
+    fi
+    if [ "$lpatch" -lt "$rpatch" ]; then
+        echo -1
+        return
+    fi
+
+    semver_compare_prerelease "$lpre" "$rpre"
+}
+
+semver_gt() {
+    [ "$(semver_compare "$1" "$2")" -gt 0 ]
 }
 
 read_key_from_text() {
@@ -45,7 +151,26 @@ read_key_from_text() {
 read_file_from_ref() {
     local ref="$1"
     local file="$2"
-    git -C "$PROJECT_DIR" show "${ref}:${file}" 2>/dev/null || true
+    local stdout_file stderr_file rc stderr_text
+    stdout_file="$(mktemp)"
+    stderr_file="$(mktemp)"
+    if git -C "$PROJECT_DIR" show "${ref}:${file}" >"$stdout_file" 2>"$stderr_file"; then
+        cat "$stdout_file"
+        rm -f "$stdout_file" "$stderr_file"
+        return 0
+    fi
+
+    rc=$?
+    stderr_text="$(cat "$stderr_file")"
+    rm -f "$stdout_file" "$stderr_file"
+
+    if printf '%s\n' "$stderr_text" | grep -Eq 'does not exist in|exists on disk, but not in'; then
+        # Missing file in this ref is expected in some comparisons.
+        return 0
+    fi
+
+    printf '%s\n' "$stderr_text" >&2
+    exit "$rc"
 }
 
 read_file_from_target() {
