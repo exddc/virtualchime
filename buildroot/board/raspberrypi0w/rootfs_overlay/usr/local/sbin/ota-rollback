@@ -1,0 +1,91 @@
+#!/bin/sh
+set -eu
+
+. /usr/local/sbin/ota-common.sh
+
+usage() {
+    cat <<EOF
+Usage: ota-rollback [--slot A|B] [--no-reboot]
+EOF
+}
+
+validate_slot() {
+    case "${1:-}" in
+        A|B) return 0 ;;
+        *)
+            ota_log "invalid slot: ${1:-<empty>} (expected A or B)"
+            usage
+            return 1
+            ;;
+    esac
+}
+
+TARGET_SLOT=""
+NO_REBOOT=0
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --slot)
+            [ $# -ge 2 ] || { usage; exit 1; }
+            TARGET_SLOT="$2"
+            validate_slot "$TARGET_SLOT" || exit 1
+            shift 2
+            ;;
+        --no-reboot)
+            NO_REBOOT=1
+            shift
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            ota_log "unknown argument: $1"
+            usage
+            exit 1
+            ;;
+    esac
+done
+
+ensure_ota_dirs
+mount_boot_if_needed
+
+if [ -z "$TARGET_SLOT" ] && [ -f "$OTA_PENDING_FILE" ]; then
+    TARGET_SLOT="$(read_env_value "$OTA_PENDING_FILE" PREVIOUS_SLOT || true)"
+fi
+
+if [ -z "$TARGET_SLOT" ]; then
+    CURRENT_SLOT="$(current_slot)"
+    case "$CURRENT_SLOT" in
+        A)
+            TARGET_SLOT="B"
+            ;;
+        B)
+            TARGET_SLOT="A"
+            ;;
+        *)
+            TARGET_SLOT="A"
+            ;;
+    esac
+fi
+
+validate_slot "$TARGET_SLOT" || exit 1
+TARGET_DEVICE="$(device_from_slot "$TARGET_SLOT")"
+set_next_root_device "$TARGET_DEVICE"
+rm -f "$OTA_PENDING_FILE"
+set_env_kv "$OTA_STATUS_FILE" LAST_RESULT "rollback_requested"
+set_env_kv "$OTA_STATUS_FILE" CURRENT_SLOT "$(current_slot)"
+set_env_kv "$OTA_STATUS_FILE" LAST_GOOD_SLOT "$TARGET_SLOT"
+set_env_kv "$OTA_STATUS_FILE" ROLLBACK_TIME_UTC "$(utc_now)"
+
+ota_log "next boot root set to $TARGET_DEVICE"
+
+if [ "$NO_REBOOT" -eq 0 ]; then
+    sync
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl reboot >/dev/null 2>&1 || true
+    fi
+    reboot >/dev/null 2>&1 || true
+    sleep 2
+    reboot -f
+fi

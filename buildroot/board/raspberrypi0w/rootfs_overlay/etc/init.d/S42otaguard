@@ -1,0 +1,65 @@
+#!/bin/sh
+
+start() {
+    printf "Starting ota-guard: "
+
+    if [ ! -f /usr/local/sbin/ota-common.sh ]; then
+        echo "SKIP (missing ota-common)"
+        return
+    fi
+
+    # shellcheck disable=SC1091
+    . /usr/local/sbin/ota-common.sh
+    ensure_ota_dirs
+
+    if [ ! -f "$OTA_PENDING_FILE" ]; then
+        echo "OK (no pending update)"
+        return
+    fi
+
+    CURRENT_SLOT="$(current_slot)"
+    TARGET_SLOT="$(read_env_value "$OTA_PENDING_FILE" TARGET_SLOT || true)"
+    ATTEMPTS_LEFT="$(read_env_value "$OTA_PENDING_FILE" ATTEMPTS_LEFT || true)"
+    if [ -z "$ATTEMPTS_LEFT" ]; then
+        ATTEMPTS_LEFT="$OTA_MAX_ATTEMPTS"
+    fi
+
+    if [ "$CURRENT_SLOT" != "$TARGET_SLOT" ]; then
+        echo "OK (pending slot ${TARGET_SLOT}, current slot ${CURRENT_SLOT})"
+        return
+    fi
+
+    if [ "$ATTEMPTS_LEFT" -le 1 ]; then
+        set_env_kv "$OTA_STATUS_FILE" LAST_RESULT "rollback_auto"
+        set_env_kv "$OTA_STATUS_FILE" LAST_ERROR "attempts_exhausted_slot_${TARGET_SLOT}"
+        /usr/local/sbin/ota-rollback --slot "$(read_env_value "$OTA_PENDING_FILE" PREVIOUS_SLOT || echo A)" --no-reboot || true
+        echo "ROLLBACK (attempts exhausted)"
+        reboot -f
+        return
+    fi
+
+    ATTEMPTS_LEFT=$((ATTEMPTS_LEFT - 1))
+    set_env_kv "$OTA_PENDING_FILE" ATTEMPTS_LEFT "$ATTEMPTS_LEFT"
+    set_env_kv "$OTA_STATUS_FILE" LAST_RESULT "boot_unconfirmed"
+    set_env_kv "$OTA_STATUS_FILE" CURRENT_SLOT "$CURRENT_SLOT"
+    echo "OK (attempts_left=$ATTEMPTS_LEFT)"
+}
+
+stop() {
+    :
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    *)
+        echo "Usage: $0 {start|stop}"
+        exit 1
+        ;;
+esac
+
+exit 0

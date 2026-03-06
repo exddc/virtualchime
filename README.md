@@ -18,7 +18,7 @@ The rewrite focuses on:
 - **Explicit separation** between product runtime and configuration runtime
 - **Custom minimal Linux image** tailored for fast boot and appliance-grade reliability
 - **Single repository** containing OS, application, Web UI, scripts, and hardware assets
-- **OTA updates** for software services and Web UI
+- **OTA updates** for firmware (A/B rootfs slots) and application services
 
 ## Products
 
@@ -51,8 +51,9 @@ The actual doorbell unit with camera, button, and MQTT integration. Currently in
 ## Documentation
 
 - [Chime README](chime/README.md) - Technical overview of the chime product
-- [Hardware README](hardware/README.md) - Detailed writeup of the hardware designs
+- [Buildroot README](buildroot/README.md) - Image build, flash, and OTA workflow details
+- [Hardware README](hardware/chime/README.md) - Detailed write-up of the hardware designs
 
 ## License
 
-tbd.
+This project is licensed under the [MIT License](LICENSE).

@@ -11,6 +11,33 @@ BUILD_META_FILE="${BOARD_DIR}/../../build_meta.env"
 if [ -f "${TARGET_DIR}/usr/local/bin/chime" ]; then
     chmod 755 "${TARGET_DIR}/usr/local/bin/chime"
 fi
+if [ -f "${TARGET_DIR}/usr/local/bin/chime-webd" ]; then
+    chmod 755 "${TARGET_DIR}/usr/local/bin/chime-webd"
+fi
+
+# Ensure OTA directories and scripts are present with executable permissions
+mkdir -p "${TARGET_DIR}/boot" "${TARGET_DIR}/data/ota" "${TARGET_DIR}/usr/local/sbin"
+missing_ota_scripts=()
+for script in \
+    "${TARGET_DIR}/usr/local/sbin/ota-common.sh" \
+    "${TARGET_DIR}/usr/local/sbin/ota-install" \
+    "${TARGET_DIR}/usr/local/sbin/ota-confirm" \
+    "${TARGET_DIR}/usr/local/sbin/ota-rollback" \
+    "${TARGET_DIR}/etc/init.d/S31persistent" \
+    "${TARGET_DIR}/etc/init.d/S42otaguard" \
+    "${TARGET_DIR}/etc/init.d/S99otaconfirm"; do
+    if [ -f "$script" ]; then
+        chmod 755 "$script"
+    else
+        missing_ota_scripts+=("$script")
+    fi
+done
+if [ "${#missing_ota_scripts[@]}" -gt 0 ]; then
+    for script in "${missing_ota_scripts[@]}"; do
+        echo "ERROR: required OTA script missing: $script" >&2
+    done
+    exit 1
+fi
 
 # Set SSH directory permissions
 if [ -d "${TARGET_DIR}/root/.ssh" ]; then

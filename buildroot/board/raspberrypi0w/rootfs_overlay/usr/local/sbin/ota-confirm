@@ -1,0 +1,36 @@
+#!/bin/sh
+set -eu
+
+. /usr/local/sbin/ota-common.sh
+
+ensure_ota_dirs
+
+CURRENT_SLOT="$(current_slot)"
+set_env_kv "$OTA_STATUS_FILE" CURRENT_SLOT "$CURRENT_SLOT"
+
+if [ ! -f "$OTA_PENDING_FILE" ]; then
+    set_env_kv "$OTA_STATUS_FILE" LAST_RESULT "no_pending_update"
+    exit 0
+fi
+
+TARGET_SLOT="$(read_env_value "$OTA_PENDING_FILE" TARGET_SLOT || true)"
+FW_VERSION="$(read_env_value "$OTA_PENDING_FILE" FW_VERSION || true)"
+
+if [ -z "$TARGET_SLOT" ]; then
+    set_env_kv "$OTA_STATUS_FILE" LAST_RESULT "pending_invalid"
+    set_env_kv "$OTA_STATUS_FILE" LAST_ERROR "missing_target_slot"
+    exit 1
+fi
+
+if [ "$CURRENT_SLOT" != "$TARGET_SLOT" ]; then
+    set_env_kv "$OTA_STATUS_FILE" LAST_RESULT "slot_mismatch"
+    set_env_kv "$OTA_STATUS_FILE" LAST_ERROR "current_${CURRENT_SLOT}_target_${TARGET_SLOT}"
+    exit 1
+fi
+
+rm -f "$OTA_PENDING_FILE"
+set_env_kv "$OTA_STATUS_FILE" LAST_RESULT "confirmed"
+set_env_kv "$OTA_STATUS_FILE" LAST_GOOD_SLOT "$CURRENT_SLOT"
+set_env_kv "$OTA_STATUS_FILE" LAST_FW_VERSION "$FW_VERSION"
+set_env_kv "$OTA_STATUS_FILE" CONFIRMED_TIME_UTC "$(utc_now)"
+exit 0

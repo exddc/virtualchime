@@ -1,0 +1,44 @@
+#!/bin/sh
+
+start() {
+    printf "Starting ota-confirm: "
+
+    if [ ! -f /data/ota/pending.env ]; then
+        echo "OK (no pending update)"
+        return
+    fi
+
+    if ! /etc/init.d/S99chime status | grep -q "supervisor is running"; then
+        echo "WARN (chime not healthy)"
+        return
+    fi
+    if ! /etc/init.d/S45webd status | grep -q "supervisor is running"; then
+        echo "WARN (webd not healthy)"
+        return
+    fi
+
+    if /usr/local/sbin/ota-confirm >/dev/null 2>&1; then
+        echo "OK (confirmed)"
+    else
+        echo "WARN (confirm failed)"
+    fi
+}
+
+stop() {
+    :
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    *)
+        echo "Usage: $0 {start|stop}"
+        exit 1
+        ;;
+esac
+
+exit 0

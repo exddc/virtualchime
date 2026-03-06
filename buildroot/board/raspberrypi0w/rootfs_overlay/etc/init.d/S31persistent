@@ -1,0 +1,63 @@
+#!/bin/sh
+
+copy_if_missing() {
+    SRC="$1"
+    DST="$2"
+    if [ ! -e "$DST" ] && [ -e "$SRC" ]; then
+        mkdir -p "$(dirname "$DST")"
+        cp "$SRC" "$DST"
+    fi
+}
+
+bind_file() {
+    SRC="$1"
+    DST="$2"
+    mkdir -p "$(dirname "$SRC")" "$(dirname "$DST")"
+    [ -e "$SRC" ] || : > "$SRC"
+    [ -e "$DST" ] || : > "$DST"
+    if ! grep -q " $DST " /proc/mounts; then
+        mount --bind "$SRC" "$DST"
+    fi
+}
+
+bind_dir() {
+    SRC="$1"
+    DST="$2"
+    mkdir -p "$SRC" "$DST"
+    if ! grep -q " $DST " /proc/mounts; then
+        mount --bind "$SRC" "$DST"
+    fi
+}
+
+start() {
+    printf "Starting persistent overlay: "
+
+    mkdir -p /data/etc /data/var/lib/chime /data/ota
+    copy_if_missing /etc/chime.conf /data/etc/chime.conf
+    copy_if_missing /etc/wpa_supplicant/wpa_supplicant.conf /data/etc/wpa_supplicant.conf
+
+    bind_file /data/etc/chime.conf /etc/chime.conf
+    bind_file /data/etc/wpa_supplicant.conf /etc/wpa_supplicant/wpa_supplicant.conf
+    bind_dir /data/var/lib/chime /var/lib/chime
+
+    echo "OK"
+}
+
+stop() {
+    :
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    *)
+        echo "Usage: $0 {start|stop}"
+        exit 1
+        ;;
+esac
+
+exit 0
