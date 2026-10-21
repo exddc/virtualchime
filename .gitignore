@@ -32,7 +32,6 @@ buildroot/build_meta.env
 # Local web UI artifacts
 node_modules/
 webui/dist/
-webui/vendor/
 
 # WireViz extras (commit wiring*.yml and wiring*.svg only)
 hardware/**/wiring*.html

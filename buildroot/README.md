@@ -272,9 +272,11 @@ source or `bun.lock` change rebuilds without `dirclean`. It runs
 missing.
 
 Bun checks each package against the integrity hash in `bun.lock` and caches it
-in `dl/chime-web-ui/bun-cache`. The first build needs network access. Later
-builds that reuse the same `dl/` directory (the Docker cache volume) install
-from the cache and work offline.
+in `dl/chime-web-ui/bun-cache`. Only a completed `chime-web-ui` build fills that
+cache; `make source` does not. After one online build, later builds that reuse
+the same `dl/` directory (the Docker cache volume) install from the cache
+without network access. To clear the cache, delete `dl/chime-web-ui/bun-cache`
+or run `docker_build.sh --clear-docker-cache`.
 
 The HTML fallback in `chime/src/webd/ui_assets.cpp` is a diagnostic for a missing
 or broken dist directory on a running device. It is not an acceptable default for

@@ -38,9 +38,10 @@ define CHIME_WEB_UI_BUILD_CMDS
 		fi; \
 	fi; \
 	echo "[chime-web-ui] Using $$BUN ($$("$$BUN" --version))"; \
-	cd $(@D) && BUN_INSTALL_CACHE_DIR=$(CHIME_WEB_UI_BUN_CACHE) \
-		"$$BUN" install --frozen-lockfile; \
-	cd $(@D) && "$$BUN" run build
+	cd $(@D) && \
+		BUN_INSTALL_CACHE_DIR=$(CHIME_WEB_UI_BUN_CACHE) \
+		"$$BUN" install --frozen-lockfile --backend=copyfile && \
+		"$$BUN" run build
 endef
 
 define CHIME_WEB_UI_INSTALL_TARGET_CMDS
