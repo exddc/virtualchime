@@ -1,0 +1,17 @@
+kernel=zImage
+enable_uart=1
+disable_splash=1
+
+# Bluetooth stays on the PL011; serial0 is the mini-UART (ttyS0)
+dtparam=krnbt=on
+
+dtparam=i2c_arm=on
+
+camera_auto_detect=0
+display_auto_detect=0
+dtoverlay=imx708
+
+dtoverlay=googlevoicehat-soundcard
+
+gpio=17,27,22,23=ip,pu
+gpio=5,6=op,dh

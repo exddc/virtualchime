@@ -116,7 +116,7 @@ The outdoor target is -20 to +50 °C; the [camera product brief](https://datashe
 
 ## Firmware interface requirements
 
-Requirements only; firmware and overlays are outside this step.
+Requirements only. The OS image that implements the platform, boot GPIO, audio, and camera rows is described in [Ring image](../../../../buildroot/README.md#ring-image).
 
 | Interface | Required behavior |
 | --- | --- |

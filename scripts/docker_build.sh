@@ -11,11 +11,13 @@ JOBS="${JOBS:-}"
 SKIP_IMAGE_BUILD="${SKIP_IMAGE_BUILD:-0}"
 DOCKER_TTY="${DOCKER_TTY:-0}"
 CLEAR_DOCKER_CACHE=0
+PRODUCT="chime"
 
 IMAGE_NAME="openchime-builder"
 VOLUME_NAME="openchime-buildroot-cache"
-OUTPUT_DIR="$PROJECT_DIR/buildroot/output"
-IMAGE_PATH="$OUTPUT_DIR/sdcard.img"
+OUTPUT_DIR=""
+IMAGE_PATH=""
+DEFCONFIG=""
 VERSION_FILE="$PROJECT_DIR/buildroot/version.env"
 APP_VERSION_FILE="$PROJECT_DIR/chime/VERSION"
 BUILD_META_SCRIPT="$SCRIPT_DIR/write_build_meta.sh"
@@ -28,9 +30,10 @@ log_timing() { local step="$1"; local secs="$2"; log "timing[$step]: ${secs}s"; 
 
 usage() {
     cat <<EOF
-Usage: $0 [buildroot-version] [--clear-docker-cache]
+Usage: $0 [buildroot-version] [--product chime|ring] [--clear-docker-cache]
 
 Options:
+  --product <name>      Image to build: chime (Pi Zero W, default) or ring (Pi Zero 2 W)
   --clear-docker-cache  Remove Docker volume '$VOLUME_NAME' before building
   -h, --help            Show this help text
 
@@ -47,6 +50,11 @@ parse_args() {
             --clear-docker-cache)
                 CLEAR_DOCKER_CACHE=1
                 shift
+                ;;
+            --product)
+                [ $# -ge 2 ] || error "--product requires a value"
+                PRODUCT="$2"
+                shift 2
                 ;;
             -h|--help)
                 usage
@@ -67,10 +75,34 @@ parse_args() {
     done
 }
 
+resolve_product() {
+    case "$PRODUCT" in
+        chime)
+            DEFCONFIG="openchime_rpi0w_defconfig"
+            OUTPUT_DIR="$PROJECT_DIR/buildroot/output"
+            ;;
+        ring)
+            DEFCONFIG="openchime_ring_rpi02w_defconfig"
+            OUTPUT_DIR="$PROJECT_DIR/buildroot/output/ring"
+            ;;
+        *)
+            error "Unknown product '$PRODUCT' (expected chime or ring)"
+            ;;
+    esac
+    IMAGE_PATH="$OUTPUT_DIR/sdcard.img"
+    log "Product: $PRODUCT ($DEFCONFIG)"
+}
+
 check_secrets() {
-    local wifi_conf="$PROJECT_DIR/buildroot/board/raspberrypi0w/rootfs_overlay/etc/wpa_supplicant/wpa_supplicant.conf"
-    local ssh_keys="$PROJECT_DIR/buildroot/board/raspberrypi0w/rootfs_overlay/root/.ssh/authorized_keys"
-    [ -f "$wifi_conf" ] || error "Wi-Fi config not found! Copy wpa_supplicant.conf.example and edit it."
+    local overlay="$PROJECT_DIR/buildroot/board/common/rootfs_overlay"
+    local legacy="$PROJECT_DIR/buildroot/board/raspberrypi0w/rootfs_overlay"
+    local wifi_conf="$overlay/etc/wpa_supplicant/wpa_supplicant.conf"
+    local ssh_keys="$overlay/root/.ssh/authorized_keys"
+    local old
+    for old in "$legacy/etc/wpa_supplicant/wpa_supplicant.conf" "$legacy/root/.ssh/authorized_keys"; do
+        [ ! -f "$old" ] || error "Secrets moved to $overlay. Run: mv $old ${old/$legacy/$overlay}"
+    done
+    [ -f "$wifi_conf" ] || error "Wi-Fi config not found! Copy $wifi_conf.example to $wifi_conf and edit it."
     [ -f "$ssh_keys" ] || error "SSH authorized_keys not found! Run: cat ~/.ssh/id_ed25519.pub > $ssh_keys"
     log "Secret files found"
 }
@@ -170,6 +202,8 @@ run_build() {
         -v "$VOLUME_NAME:/home/builder/work" \
         -e BUILDROOT_VERSION="$BUILDROOT_VERSION" \
         -e JOBS="$JOBS" \
+        -e PRODUCT="$PRODUCT" \
+        -e DEFCONFIG="$DEFCONFIG" \
         "$IMAGE_NAME" \
         bash -c '
 set -euo pipefail
@@ -207,7 +241,7 @@ echo "[build] Using make jobs: $JOBS"
 echo "[build] Setting up external tree, chime source, and webui source..."
 mkdir -p /home/builder/br2-external /home/builder/chime-src /home/builder/webui-src
 sync_start="$(step_start)"
-rsync -a --delete /home/builder/openchime/buildroot/ /home/builder/br2-external/
+rsync -a --delete --exclude /output/ /home/builder/openchime/buildroot/ /home/builder/br2-external/
 bash /home/builder/openchime/scripts/sync_chime_src.sh \
     /home/builder/openchime /home/builder/chime-src
 bash /home/builder/openchime/scripts/sync_webui_src.sh \
@@ -228,42 +262,59 @@ step_done "sync" "$sync_start"
 
 cd "buildroot-$BUILDROOT_VERSION"
 
-echo "[build] Configuring for Raspberry Pi Zero W..."
+# Chime keeps the in-tree output/ so existing caches stay valid.
+if [ "$PRODUCT" = "chime" ]; then
+    BR_OUT="output"
+    BR_MAKE=(make BR2_EXTERNAL=/home/builder/br2-external)
+    EXPORT_DIR="/home/builder/work"
+else
+    BR_OUT="/home/builder/work/output-$PRODUCT"
+    BR_MAKE=(make O="$BR_OUT" BR2_EXTERNAL=/home/builder/br2-external)
+    EXPORT_DIR="/home/builder/work/$PRODUCT"
+fi
+mkdir -p "$EXPORT_DIR"
+
+echo "[build] Configuring $PRODUCT ($DEFCONFIG)..."
 defconfig_start="$(step_start)"
-make BR2_EXTERNAL=/home/builder/br2-external openchime_rpi0w_defconfig
+"${BR_MAKE[@]}" "$DEFCONFIG"
 step_done "defconfig" "$defconfig_start"
 
 echo "[build] Building (this takes 30-90 min)..."
 build_start="$(step_start)"
-make BR2_EXTERNAL=/home/builder/br2-external -j"$JOBS"
+"${BR_MAKE[@]}" -j"$JOBS"
 step_done "make" "$build_start"
 
-if [ -f "output/images/sdcard.img" ]; then
-    cp output/images/sdcard.img /home/builder/work/
-    if [ -f "output/images/rootfs.ext4" ]; then
-        cp output/images/rootfs.ext4 /home/builder/work/
+if [ -f "$BR_OUT/images/sdcard.img" ]; then
+    cp "$BR_OUT/images/sdcard.img" "$EXPORT_DIR/"
+    if [ -f "$BR_OUT/images/rootfs.ext4" ]; then
+        cp "$BR_OUT/images/rootfs.ext4" "$EXPORT_DIR/"
     fi
     echo "[build] SUCCESS! Image ready."
 else
     echo "[build] Build finished but sdcard.img not found"
-    ls -la output/images/ 2>/dev/null || true
+    ls -la "$BR_OUT/images/" 2>/dev/null || true
 fi
 '
     
     local export_start
     export_start="$(now)"
     log "Extracting image from volume..."
+    local export_subdir=""
+    if [ "$PRODUCT" != "chime" ]; then
+        export_subdir="/$PRODUCT"
+    fi
     docker run --rm \
         -v "$VOLUME_NAME:/work:ro" \
         -v "$OUTPUT_DIR:/out" \
+        -e SRC="/work$export_subdir" \
         alpine sh -eu -c '
-if [ ! -f /work/sdcard.img ]; then
-    echo "ERROR: sdcard.img not found in Docker volume" >&2
+if [ ! -f "$SRC/sdcard.img" ]; then
+    echo "ERROR: sdcard.img not found in Docker volume at $SRC" >&2
     exit 1
 fi
-cp /work/sdcard.img /out/
-if [ -f /work/rootfs.ext4 ]; then
-    cp /work/rootfs.ext4 /out/
+cp "$SRC/sdcard.img" /out/
+if [ -f "$SRC/rootfs.ext4" ]; then
+    cp "$SRC/rootfs.ext4" /out/
 fi
 echo "Done"
 '
@@ -287,7 +338,7 @@ $rootfs_summary
 
 Next:
   1) Flash SD card:
-     sudo dd if=$IMAGE_PATH of=/dev/rdiskN bs=4m status=progress
+     ./scripts/flash_sd.sh --product $PRODUCT /dev/diskN
   2) Eject and insert card into the Pi
   3) (Optional) Clean Docker cache:
      docker volume rm $VOLUME_NAME
@@ -296,6 +347,7 @@ EOF
 
 parse_args "$@"
 log "Open Chime Buildroot Docker Build"
+resolve_product
 validate_inputs
 check_secrets
 check_versions

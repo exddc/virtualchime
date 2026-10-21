@@ -17,8 +17,8 @@ WEBUI_DIR="$PROJECT_DIR/webui"
 WEBUI_DIST_DIR="$WEBUI_DIR/dist"
 
 DEFAULT_CONFIG="$PROJECT_DIR/buildroot/board/raspberrypi0w/rootfs_overlay/etc/chime.conf"
-DEFAULT_WPA_CONFIG="$PROJECT_DIR/buildroot/board/raspberrypi0w/rootfs_overlay/etc/wpa_supplicant/wpa_supplicant.conf"
-DEFAULT_WPA_EXAMPLE="$PROJECT_DIR/buildroot/board/raspberrypi0w/rootfs_overlay/etc/wpa_supplicant/wpa_supplicant.conf.example"
+DEFAULT_WPA_CONFIG="$PROJECT_DIR/buildroot/board/common/rootfs_overlay/etc/wpa_supplicant/wpa_supplicant.conf"
+DEFAULT_WPA_EXAMPLE="$PROJECT_DIR/buildroot/board/common/rootfs_overlay/etc/wpa_supplicant/wpa_supplicant.conf.example"
 BUILDROOT_VERSION_FILE="$PROJECT_DIR/buildroot/version.env"
 APP_VERSION_FILE="$PROJECT_DIR/chime/VERSION"
 

@@ -105,7 +105,7 @@ jobs:
           bun install --frozen-lockfile --offline
           bun test
           bun run build
-          bash ../buildroot/board/raspberrypi0w/assert_chime_web_ui_dist.sh dist
+          bash ../buildroot/board/common/assert_chime_web_ui_dist.sh dist
 
       - name: Determine CI file scope
         run: |
@@ -149,6 +149,7 @@ jobs:
         run: |
           bash ./scripts/test_assert_chime_web_ui_dist.sh
           bash ./scripts/test_post_build_web_ui.sh
+          bash ./scripts/test_ring_post_build.sh
 
       - name: Run chime CI checks
         env:
@@ -184,7 +185,7 @@ jobs:
           path: ${{ runner.temp }}/openchime-buildroot
           # Exact defconfig key only. A restore-keys prefix can reuse gcc from
           # a different defconfig, and Buildroot will not rebuild it.
-          key: buildroot-chime-${{ runner.os }}-2024.02.1-${{ hashFiles('buildroot/configs/**') }}
+          key: buildroot-chime-${{ runner.os }}-2024.02.1-${{ hashFiles('buildroot/configs/openchime_rpi0w_defconfig') }}
 
       - name: Build Buildroot chime package
         env:

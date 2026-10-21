@@ -1,0 +1,39 @@
+#!/bin/sh
+# mdev loads drivers by modalias. Modules without a device to match (i2c-dev)
+# are listed one per line in /etc/modules.
+
+MODULES_FILE="/etc/modules"
+
+start() {
+    printf "Loading extra modules: "
+    if [ ! -f "$MODULES_FILE" ]; then
+        echo "OK (none)"
+        return 0
+    fi
+    failed=""
+    while read -r module _; do
+        case "$module" in
+            ''|'#'*) continue ;;
+        esac
+        modprobe "$module" 2>/dev/null || failed="$failed $module"
+    done < "$MODULES_FILE"
+    if [ -n "$failed" ]; then
+        echo "WARN (failed:$failed)"
+    else
+        echo "OK"
+    fi
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        ;;
+    *)
+        echo "Usage: $0 {start|stop}"
+        exit 1
+        ;;
+esac
+
+exit 0

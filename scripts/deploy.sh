@@ -17,7 +17,7 @@ ROOTFS_IMAGE="$OUTPUT_DIR/rootfs.ext4"
 BUILDROOT_VERSION="${BUILDROOT_VERSION:-2024.02.1}"
 BUILD_META_SCRIPT="$SCRIPT_DIR/write_build_meta.sh"
 LOCAL_CHIME_SCRIPT="$SCRIPT_DIR/local_chime.sh"
-OTA_SCRIPT_DIR="$PROJECT_DIR/buildroot/board/raspberrypi0w/rootfs_overlay/usr/local/sbin"
+OTA_SCRIPT_DIR="$PROJECT_DIR/buildroot/board/common/rootfs_overlay/usr/local/sbin"
 
 SSH_USER="root"
 SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=10"

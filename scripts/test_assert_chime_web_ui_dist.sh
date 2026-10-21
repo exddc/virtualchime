@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-ASSERT_SCRIPT="$PROJECT_DIR/buildroot/board/raspberrypi0w/assert_chime_web_ui_dist.sh"
+ASSERT_SCRIPT="$PROJECT_DIR/buildroot/board/common/assert_chime_web_ui_dist.sh"
 
 fail() {
     echo "[test-assert-chime-web-ui-dist] ERROR: $*" >&2

@@ -1149,7 +1149,7 @@ def check_product(schema: dict[str, Any]) -> int:
         REPO
         / "buildroot"
         / "board"
-        / "raspberrypi0w"
+        / "common"
         / "rootfs_overlay"
         / "etc"
         / "init.d"
