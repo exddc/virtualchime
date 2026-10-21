@@ -1,7 +1,0 @@
-# Dropbear SSH daemon configuration
-
-# Disable password authentication
-DROPBEAR_OPTS="-s -g"
-
-# -s: Disable password logins
-# -g: Disable password logins for root

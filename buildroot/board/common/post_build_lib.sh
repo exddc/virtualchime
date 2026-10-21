@@ -57,6 +57,17 @@ oc_fix_ssh_permissions() {
     fi
 }
 
+# S41timesync owns clock sync; the ntp package's daemon would fight its ntpd -q.
+oc_remove_ntpd_service() {
+    rm -f "${TARGET_DIR}/etc/init.d/S49ntp"
+}
+
+# Host keys live on /data so they survive OTA rootfs updates.
+oc_persist_dropbear_keys() {
+    rm -rf "${TARGET_DIR}/etc/dropbear"
+    ln -sfn /etc/persistent/dropbear "${TARGET_DIR}/etc/dropbear"
+}
+
 oc_kernel_release() {
     local dir=""
     if [ -d "${TARGET_DIR}/lib/modules" ]; then

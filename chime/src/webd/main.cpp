@@ -221,7 +221,7 @@ int main(int argc, char *argv[]) {
     tls.cert_path = tls_cert_path;
     tls.key_path = tls_key_path;
     tls.cert_organization = "OpenChime";
-    tls.cert_common_name = "chime.local";
+    tls.cert_common_name = host_label + ".local";
     tls.log_component = "webd";
     oc::http::TlsServer web_server(
         logger, std::move(tls), [&api](const oc::http::HttpRequest &request) { return api.Handle(request); },
