@@ -12,7 +12,7 @@ CHIME_WEB_UI_LICENSE_FILES = README.md
 CHIME_WEB_UI_SUPPORTS_IN_SOURCE_BUILD = YES
 CHIME_WEB_UI_INSTALL_TARGET = YES
 CHIME_WEB_UI_TARGET_DIST = /usr/local/share/chime-web-ui/dist
-CHIME_WEB_UI_ASSERT = $(BR2_EXTERNAL_OPENCHIME_PATH)/board/raspberrypi0w/assert_chime_web_ui_dist.sh
+CHIME_WEB_UI_ASSERT = $(BR2_EXTERNAL_OPENCHIME_PATH)/board/common/assert_chime_web_ui_dist.sh
 CHIME_WEB_UI_VENDOR_ARCHIVE = vendor/node_modules.tar.gz
 CHIME_WEB_UI_VENDOR_CHECKSUM = vendor/node_modules.tar.gz.sha256
 

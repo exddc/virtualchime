@@ -1,0 +1,93 @@
+// One duplex I2S card for the Ring: MAX98357A playback on PCM_DOUT (GPIO21)
+// and SPH0645 capture on PCM_DIN (GPIO20). The Pi drives BCLK and LRCLK.
+// Neither codec has an SD_MODE GPIO.
+
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "brcm,bcm2835";
+
+	fragment@0 {
+		target = <&i2s_clk_producer>;
+		__overlay__ {
+			status = "okay";
+
+			ring_i2s_port: port {
+				ring_i2s_ep: endpoint {
+					remote-endpoint = <&ring_multi_ep>;
+					format = "i2s";
+					bitclock-master;
+					frame-master;
+				};
+			};
+		};
+	};
+
+	fragment@1 {
+		target-path = "/";
+		__overlay__ {
+			ring_amp: ring-amp {
+				compatible = "maxim,max98357a";
+				#sound-dai-cells = <0>;
+				status = "okay";
+
+				port {
+					ring_amp_ep: endpoint {
+						remote-endpoint = <&ring_multi_amp_ep>;
+					};
+				};
+			};
+
+			ring_mic: ring-mic {
+				compatible = "adi,adau7002";
+				#sound-dai-cells = <0>;
+				status = "okay";
+
+				port {
+					ring_mic_ep: endpoint {
+						remote-endpoint = <&ring_multi_mic_ep>;
+					};
+				};
+			};
+		};
+	};
+
+	fragment@2 {
+		target = <&sound>;
+		__overlay__ {
+			compatible = "audio-graph-card2";
+			label = "RingAudio";
+			links = <&ring_i2s_port>;
+			status = "okay";
+
+			multi {
+				ports {
+					#address-cells = <1>;
+					#size-cells = <0>;
+
+					port@0 {
+						reg = <0>;
+						ring_multi_ep: endpoint {
+							remote-endpoint = <&ring_i2s_ep>;
+						};
+					};
+
+					port@1 {
+						reg = <1>;
+						ring_multi_amp_ep: endpoint {
+							remote-endpoint = <&ring_amp_ep>;
+						};
+					};
+
+					port@2 {
+						reg = <2>;
+						ring_multi_mic_ep: endpoint {
+							remote-endpoint = <&ring_mic_ep>;
+						};
+					};
+				};
+			};
+		};
+	};
+};

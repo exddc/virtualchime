@@ -22,8 +22,8 @@ logs/
 **logs/
 
 # Buildroot secrets
-buildroot/board/raspberrypi0w/rootfs_overlay/etc/wpa_supplicant/wpa_supplicant.conf
-buildroot/board/raspberrypi0w/rootfs_overlay/root/.ssh/authorized_keys
+buildroot/board/common/rootfs_overlay/etc/wpa_supplicant/wpa_supplicant.conf
+buildroot/board/common/rootfs_overlay/root/.ssh/authorized_keys
 
 # Buildroot build output
 buildroot/output/

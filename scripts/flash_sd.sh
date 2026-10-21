@@ -1,25 +1,52 @@
 #!/usr/bin/env bash
-# Usage: ./scripts/flash_sd.sh [/dev/diskN]
+# Usage: ./scripts/flash_sd.sh [--product chime|ring] [/dev/diskN]
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-IMAGE_PATH="$PROJECT_DIR/buildroot/output/sdcard.img"
 
 log() { echo "[flash] $*"; }
 error() { echo "[flash] ERROR: $*" >&2; exit 1; }
 
+PRODUCT="chime"
+DISK=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --product)
+            [ $# -ge 2 ] || error "--product requires a value"
+            PRODUCT="$2"
+            shift 2
+            ;;
+        *)
+            [ -z "$DISK" ] || error "Unexpected argument: $1"
+            DISK="$1"
+            shift
+            ;;
+    esac
+done
+
+case "$PRODUCT" in
+    chime)
+        IMAGE_PATH="$PROJECT_DIR/buildroot/output/sdcard.img"
+        BOARD_NAME="Raspberry Pi Zero W"
+        ;;
+    ring)
+        IMAGE_PATH="$PROJECT_DIR/buildroot/output/ring/sdcard.img"
+        BOARD_NAME="Raspberry Pi Zero 2 W"
+        ;;
+    *)
+        error "Unknown product '$PRODUCT' (expected chime or ring)"
+        ;;
+esac
+
 # Check image exists
 if [ ! -f "$IMAGE_PATH" ]; then
     error "Image not found at: $IMAGE_PATH
-Run ./scripts/docker_build.sh first to build the image."
+Run ./scripts/docker_build.sh --product $PRODUCT first to build the image."
 fi
 
 IMAGE_SIZE=$(ls -lh "$IMAGE_PATH" | awk '{print $5}')
 log "Image: $IMAGE_PATH ($IMAGE_SIZE)"
-
-# Get disk device
-DISK="${1:-}"
 
 if [ -z "$DISK" ]; then
     echo ""
@@ -87,9 +114,9 @@ echo ""
 log "✓ Flash complete!"
 echo ""
 echo "Next steps:"
-echo "  1. Insert SD card into Raspberry Pi Zero W"
+echo "  1. Insert SD card into the $BOARD_NAME"
 echo "  2. Connect FTDI for serial console (optional): screen /dev/tty.usbserial* 115200"
 echo "  3. Power on the Pi"
 echo "  4. Wait ~30 seconds for boot + WiFi connection"
-echo "  5. Find the Pi: arp -a | grep b8:27:eb"
+echo "  5. Find the Pi: ping $PRODUCT.local (or check your router's DHCP leases)"
 echo "  6. SSH in: ssh root@<ip-address>"

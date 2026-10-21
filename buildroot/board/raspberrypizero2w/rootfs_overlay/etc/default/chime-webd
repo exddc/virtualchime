@@ -1,0 +1,12 @@
+# shellcheck shell=sh
+LOGFILE="/var/log/ring-web.log"
+CHIME_CONFIG_FATAL_STAMP="/var/lib/ring/config.fatal"
+
+export CHIME_WEBD_CHIME_CONFIG="/etc/ring.conf"
+export CHIME_WEBD_TLS_CERT="/etc/persistent/webd-tls/cert.pem"
+export CHIME_WEBD_TLS_KEY="/etc/persistent/webd-tls/key.pem"
+export CHIME_WEBD_HOST_LABEL="ring"
+export CHIME_WEBD_CHIME_RESTART_CMD="/bin/true"
+export CHIME_WEBD_AUTH_DIR="/var/lib/ring/auth"
+export CHIME_WEBD_OBSERVED_TOPICS_PATH="/var/lib/ring/observed_topics.txt"
+export CHIME_WEBD_RING_SOUNDS_DIR="/var/lib/ring/ring_sounds"

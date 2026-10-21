@@ -1,0 +1,90 @@
+#!/bin/sh
+# Appends firmware under-voltage transitions to /data so a brown-out that
+# resets the board leaves evidence. The kernel log is in RAM and is lost.
+
+DAEMON="powerlog"
+PIDFILE="/var/run/powerlog.pid"
+LOGFILE="/data/var/log/power.log"
+LOG_MAX_BYTES=65536
+POLL_SECONDS=5
+
+find_alarm() {
+    for dir in /sys/class/hwmon/hwmon*; do
+        [ -r "$dir/name" ] || continue
+        if [ "$(cat "$dir/name")" = "rpi_volt" ] && [ -r "$dir/in0_lcrit_alarm" ]; then
+            echo "$dir/in0_lcrit_alarm"
+            return 0
+        fi
+    done
+    return 1
+}
+
+log_line() {
+    mkdir -p "$(dirname "$LOGFILE")"
+    if [ -f "$LOGFILE" ] && [ "$(wc -c < "$LOGFILE")" -ge "$LOG_MAX_BYTES" ]; then
+        mv -f "$LOGFILE" "$LOGFILE.1"
+    fi
+    echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) uptime=$(cut -d' ' -f1 /proc/uptime) $*" >> "$LOGFILE"
+    sync "$LOGFILE" 2>/dev/null || sync
+}
+
+monitor() {
+    alarm=""
+    tries=0
+    while [ -z "$alarm" ] && [ "$tries" -lt 12 ]; do
+        alarm="$(find_alarm)" || alarm=""
+        [ -n "$alarm" ] && break
+        tries=$((tries + 1))
+        sleep "$POLL_SECONDS"
+    done
+    if [ -z "$alarm" ]; then
+        log_line "boot undervoltage_monitor=unavailable"
+        return
+    fi
+
+    last="$(cat "$alarm" 2>/dev/null || echo unknown)"
+    log_line "boot undervoltage=$last"
+    while true; do
+        sleep "$POLL_SECONDS"
+        now="$(cat "$alarm" 2>/dev/null || echo unknown)"
+        if [ "$now" != "$last" ]; then
+            log_line "undervoltage=$now"
+            last="$now"
+        fi
+    done
+}
+
+start() {
+    printf "Starting %s: " "$DAEMON"
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+        echo "OK (already running)"
+        return 0
+    fi
+    monitor &
+    echo $! > "$PIDFILE"
+    echo "OK"
+}
+
+stop() {
+    printf "Stopping %s: " "$DAEMON"
+    if [ -f "$PIDFILE" ]; then
+        kill "$(cat "$PIDFILE")" 2>/dev/null || true
+        rm -f "$PIDFILE"
+    fi
+    echo "OK"
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    *)
+        echo "Usage: $0 {start|stop}"
+        exit 1
+        ;;
+esac
+
+exit 0

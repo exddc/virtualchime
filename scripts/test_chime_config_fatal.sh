@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-POLICY="$PROJECT_DIR/buildroot/board/raspberrypi0w/rootfs_overlay/usr/local/sbin/chime-supervisor-policy.sh"
+POLICY="$PROJECT_DIR/buildroot/board/common/rootfs_overlay/usr/local/sbin/chime-supervisor-policy.sh"
 MIGRATE_BIN="${1:-}"
 
 fail() {

@@ -127,7 +127,7 @@ run_container() {
     log "Using make jobs: $jobs"
 
     mkdir -p /home/builder/br2-external /home/builder/chime-src /home/builder/webui-src
-    rsync -a --delete /home/builder/openchime/buildroot/ /home/builder/br2-external/
+    rsync -a --delete --exclude /output/ /home/builder/openchime/buildroot/ /home/builder/br2-external/
     bash /home/builder/openchime/scripts/sync_chime_src.sh \
         /home/builder/openchime /home/builder/chime-src
     bash /home/builder/openchime/scripts/sync_webui_src.sh \

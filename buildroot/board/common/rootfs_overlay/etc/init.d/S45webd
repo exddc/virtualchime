@@ -6,6 +6,9 @@ LOGFILE="/var/log/chime-web.log"
 SUPERVISOR_PIDFILE="/var/run/chime-webd_supervisor.pid"
 RESTART_DELAY_SECONDS=2
 
+# shellcheck source=/dev/null
+[ -r /etc/default/chime-webd ] && . /etc/default/chime-webd
+
 # shellcheck disable=SC1091,SC2154
 . /usr/local/sbin/chime-supervisor-policy.sh
 

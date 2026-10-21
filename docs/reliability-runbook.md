@@ -4,6 +4,8 @@ On-device operations for a flashed Open Chime image. Build and flash steps stay 
 
 SSH as `root` unless noted. Serial console is `ttyS0` at `115200`.
 
+This runbook describes the Chime image. The Ring image shares OTA, networking, time sync, and `chime-webd`, but keeps a read-only root and different paths; see [Ring image](../buildroot/README.md#ring-image).
+
 ## First boot with no MQTT broker
 
 A clean image ships `mqtt_host=` in `/etc/chime.conf`. Empty means **not configured**, not loopback.

@@ -1,51 +1,17 @@
 #!/bin/bash
-# Post-build script for Raspberry Pi Zero W image
+# Post-build script for the Chime image (Raspberry Pi Zero W)
 set -euo pipefail
 
 BOARD_DIR="$(dirname "$0")"
 TARGET_DIR="$1"
-VERSION_FILE="${BOARD_DIR}/../../version.env"
-BUILD_META_FILE="${BOARD_DIR}/../../build_meta.env"
-UI_DIST_DIR="${TARGET_DIR}/usr/local/share/chime-web-ui/dist"
-bash "${BOARD_DIR}/assert_chime_web_ui_dist.sh" "$UI_DIST_DIR"
 
-# Set permissions for binary
-if [ -f "${TARGET_DIR}/usr/local/bin/chime" ]; then
-    chmod 755 "${TARGET_DIR}/usr/local/bin/chime"
-fi
-if [ -f "${TARGET_DIR}/usr/local/bin/chime-webd" ]; then
-    chmod 755 "${TARGET_DIR}/usr/local/bin/chime-webd"
-fi
+# shellcheck source=../common/post_build_lib.sh
+. "${BOARD_DIR}/../common/post_build_lib.sh"
 
-# Ensure OTA directories and scripts are present with executable permissions
-mkdir -p "${TARGET_DIR}/boot" "${TARGET_DIR}/data/ota" "${TARGET_DIR}/usr/local/sbin"
-missing_ota_scripts=()
-for script in \
-    "${TARGET_DIR}/usr/local/sbin/ota-common.sh" \
-    "${TARGET_DIR}/usr/local/sbin/ota-install" \
-    "${TARGET_DIR}/usr/local/sbin/ota-confirm" \
-    "${TARGET_DIR}/usr/local/sbin/ota-rollback" \
-    "${TARGET_DIR}/etc/init.d/S31persistent" \
-    "${TARGET_DIR}/etc/init.d/S42otaguard" \
-    "${TARGET_DIR}/etc/init.d/S99otaconfirm"; do
-    if [ -f "$script" ]; then
-        chmod 755 "$script"
-    else
-        missing_ota_scripts+=("$script")
-    fi
-done
-if [ "${#missing_ota_scripts[@]}" -gt 0 ]; then
-    for script in "${missing_ota_scripts[@]}"; do
-        echo "ERROR: required OTA script missing: $script" >&2
-    done
-    exit 1
-fi
-
-# Set SSH directory permissions
-if [ -d "${TARGET_DIR}/root/.ssh" ]; then
-    chmod 700 "${TARGET_DIR}/root/.ssh"
-    chmod 600 "${TARGET_DIR}/root/.ssh/authorized_keys" 2>/dev/null || true
-fi
+oc_assert_web_ui_dist
+oc_chmod_binaries chime chime-webd
+oc_require_ota_scripts
+oc_fix_ssh_permissions
 
 # Create firmware symlink for Pi Zero W WiFi
 FIRMWARE_DIR="${TARGET_DIR}/lib/firmware/brcm"
@@ -54,76 +20,13 @@ if [ -d "$FIRMWARE_DIR" ]; then
 fi
 
 # Generate modules.dep
-KERNEL_VERSION=""
-if [ -d "${TARGET_DIR}/lib/modules" ]; then
-    KERNEL_VERSION="$(find "${TARGET_DIR}/lib/modules" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | head -n 1 || true)"
-    KERNEL_VERSION="${KERNEL_VERSION##*/}"
-fi
+KERNEL_VERSION="$(oc_kernel_release)"
 if [ -n "$KERNEL_VERSION" ] && [ -d "${TARGET_DIR}/lib/modules/${KERNEL_VERSION}" ]; then
     if command -v depmod &>/dev/null; then
         depmod -a -b "${TARGET_DIR}" "${KERNEL_VERSION}" 2>/dev/null || true
     fi
 fi
 
-# Generate release metadata for field diagnostics
-if [ -f "$VERSION_FILE" ]; then
-    # shellcheck disable=SC1090
-    . "$VERSION_FILE"
-fi
-if [ -f "$BUILD_META_FILE" ]; then
-    # shellcheck disable=SC1090
-    . "$BUILD_META_FILE"
-fi
-
-OPENCHIME_OS_VERSION="${OPENCHIME_OS_VERSION:-unknown}"
-CHIME_CONFIG_VERSION="${CHIME_CONFIG_VERSION:-unknown}"
-BUILDROOT_RELEASE="${BUILDROOT_VERSION:-unknown}"
-BUILD_TIMESTAMP_UTC="${BUILD_TIMESTAMP_UTC:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
-CHIME_CONFIG_SHA256="unknown"
-CHIME_APP_VERSION="unknown"
-CHIME_BUILD_ID="${CHIME_BUILD_ID:-unknown}"
-OPENCHIME_BUILD_ID="${OPENCHIME_BUILD_ID:-unknown}"
-SOURCE_GIT_SHA="${SOURCE_GIT_SHA:-unknown}"
-SOURCE_GIT_SHORT="${SOURCE_GIT_SHORT:-unknown}"
-SOURCE_GIT_DIRTY="${SOURCE_GIT_DIRTY:-unknown}"
-
-if [ -f "${TARGET_DIR}/etc/chime-app-version" ]; then
-    CHIME_APP_VERSION="$(head -n 1 "${TARGET_DIR}/etc/chime-app-version" | tr -d "[:space:]")"
-fi
-if [ -f "${TARGET_DIR}/etc/chime-build-id" ]; then
-    CHIME_BUILD_ID="$(head -n 1 "${TARGET_DIR}/etc/chime-build-id" | tr -d "[:space:]")"
-fi
-
-if [ -f "${TARGET_DIR}/etc/chime.conf" ] && command -v sha256sum &>/dev/null; then
-    CHIME_CONFIG_SHA256="$(sha256sum "${TARGET_DIR}/etc/chime.conf" | awk '{print $1}')"
-fi
-
-CHIME_APP_VERSION_FULL="${CHIME_APP_VERSION}"
-if [ "$CHIME_BUILD_ID" != "unknown" ] && [ -n "$CHIME_BUILD_ID" ]; then
-    CHIME_APP_VERSION_FULL="${CHIME_APP_VERSION}+${CHIME_BUILD_ID}"
-fi
-
-OPENCHIME_OS_VERSION_FULL="${OPENCHIME_OS_VERSION}"
-if [ "$OPENCHIME_BUILD_ID" != "unknown" ] && [ -n "$OPENCHIME_BUILD_ID" ]; then
-    OPENCHIME_OS_VERSION_FULL="${OPENCHIME_OS_VERSION}+${OPENCHIME_BUILD_ID}"
-fi
-
-cat > "${TARGET_DIR}/etc/openchime-release" <<EOF
-OPENCHIME_OS_VERSION=${OPENCHIME_OS_VERSION}
-OPENCHIME_OS_VERSION_FULL=${OPENCHIME_OS_VERSION_FULL}
-CHIME_APP_VERSION=${CHIME_APP_VERSION}
-CHIME_APP_VERSION_FULL=${CHIME_APP_VERSION_FULL}
-CHIME_CONFIG_VERSION=${CHIME_CONFIG_VERSION}
-BUILDROOT_RELEASE=${BUILDROOT_RELEASE}
-BUILD_TIMESTAMP_UTC=${BUILD_TIMESTAMP_UTC}
-LINUX_KERNEL_RELEASE=${KERNEL_VERSION:-unknown}
-CHIME_CONFIG_SHA256=${CHIME_CONFIG_SHA256}
-CHIME_BUILD_ID=${CHIME_BUILD_ID}
-OPENCHIME_BUILD_ID=${OPENCHIME_BUILD_ID}
-SOURCE_GIT_SHA=${SOURCE_GIT_SHA}
-SOURCE_GIT_SHORT=${SOURCE_GIT_SHORT}
-SOURCE_GIT_DIRTY=${SOURCE_GIT_DIRTY}
-EOF
-chmod 644 "${TARGET_DIR}/etc/openchime-release"
+oc_write_release chime etc/chime.conf
 
 echo "Post-build complete"

@@ -48,7 +48,7 @@ A future product.
 ├── platform/           # Product-agnostic C++ platform (`oc::`; see platform/README.md)
 ├── chime/              # Chime ring service and HTTPS setup daemon (`src/webd/`)
 ├── webui/              # Svelte configuration UI served by chime-webd
-├── buildroot/          # Raspberry Pi Zero W image, overlays, and OTA tooling
+├── buildroot/          # Chime (Pi Zero W) and Ring (Pi Zero 2 W) images, overlays, and OTA tooling
 ├── hardware/           # CAD, BOM, wiring (chime/, ring/)
 ├── scripts/            # Build, CI, flash, deploy, and local-run helpers
 ├── docs/               # Operational documentation
@@ -61,7 +61,7 @@ A future product.
 
 - [Platform README](platform/README.md) — product-agnostic library, dependency direction, adding a route
 - [Chime README](chime/README.md) — Chime runtime, webd, and config keys
-- [Buildroot README](buildroot/README.md) — Image build, flash, and deploy
+- [Buildroot README](buildroot/README.md) — Image build, flash, and deploy for Chime and Ring
 - [Reliability runbook](docs/reliability-runbook.md) — On-device logs, MQTT, webd/TLS, persistent data, OTA, recovery
 - [Chime hardware](hardware/chime/README.md): CAD, BOM, wiring, and interface
 - [Ring hardware](hardware/ring/README.md): doorbell BOM, wiring, and pin map

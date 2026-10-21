@@ -1,5 +1,5 @@
 #!/bin/sh
-# Time sync using init-only keys in /etc/chime.conf (ntp_servers, time_http_urls,
+# Time sync using init-only keys in CONFIG_FILE (ntp_servers, time_http_urls,
 # time_sync_retries, time_sync_retry_delay, time_sync_interval). The chime and
 # chime-webd daemons do not read these keys.
 
@@ -7,6 +7,9 @@ DAEMON="timesync"
 CONFIG_FILE="/etc/chime.conf"
 PIDFILE="/var/run/chime_timesync.pid"
 LOGFILE="/var/log/chime.log"
+
+# shellcheck source=/dev/null
+[ -r /etc/default/timesync ] && . /etc/default/timesync
 
 NTP_SERVERS_DEFAULT="time.cloudflare.com,time.google.com,pool.ntp.org"
 TIME_HTTP_URLS_DEFAULT="http://connectivitycheck.gstatic.com/generate_204,http://detectportal.firefox.com/success.txt,http://example.com/"
