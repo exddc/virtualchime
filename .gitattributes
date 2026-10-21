@@ -1,3 +1,2 @@
-webui/vendor/node_modules.tar.gz binary
 platform/third_party/cJSON/** linguist-vendored
 hardware/**/*.svg linguist-generated=true

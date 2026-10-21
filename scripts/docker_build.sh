@@ -254,10 +254,6 @@ if [ ! -s /home/builder/webui-src/.source-id ]; then
     echo "[build] ERROR: missing staged webui source id" >&2
     exit 1
 fi
-if [ ! -f /home/builder/webui-src/vendor/node_modules.tar.gz ]; then
-    echo "[build] ERROR: missing vendored webui dependencies" >&2
-    exit 1
-fi
 step_done "sync" "$sync_start"
 
 cd "buildroot-$BUILDROOT_VERSION"

@@ -99,10 +99,7 @@ jobs:
           bun --version
           expected="$(tr -d '[:space:]' < ../buildroot/bun-version)"
           test "$(bun --version)" = "$expected"
-          (cd vendor && sha256sum -c node_modules.tar.gz.sha256)
-          bash ../scripts/assert_webui_vendor_archive.sh vendor/node_modules.tar.gz
-          tar -xzf vendor/node_modules.tar.gz
-          bun install --frozen-lockfile --offline
+          bun install --frozen-lockfile
           bun test
           bun run build
           bash ../buildroot/board/common/assert_chime_web_ui_dist.sh dist
@@ -143,7 +140,6 @@ jobs:
         run: |
           bash ./scripts/test_sync_chime_src.sh
           bash ./scripts/test_sync_webui_src.sh
-          bash ./scripts/test_vendor_webui_archive.sh
 
       - name: Test baked web UI image assertions
         run: |

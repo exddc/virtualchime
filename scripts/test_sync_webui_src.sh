@@ -22,16 +22,13 @@ expect_unsafe_destination() {
 
 seed_webui() {
     local source="$1"
-    mkdir -p "$source/webui/src" "$source/webui/dist" "$source/webui/node_modules/pkg" \
-        "$source/webui/vendor"
+    mkdir -p "$source/webui/src" "$source/webui/dist" "$source/webui/node_modules/pkg"
     printf '{ "name": "openchime-webui" }\n' > "$source/webui/package.json"
     printf '{ "lockfileVersion": 1 }\n' > "$source/webui/bun.lock"
     printf '<html><script type="module" src="/src/main.ts"></script></html>\n' > "$source/webui/index.html"
     printf 'export {}\n' > "$source/webui/src/main.ts"
     printf 'host-dist\n' > "$source/webui/dist/index.html"
     printf 'host-dep\n' > "$source/webui/node_modules/pkg/index.js"
-    printf 'vendor-tar\n' > "$source/webui/vendor/node_modules.tar.gz"
-    printf 'deadbeef  node_modules.tar.gz\n' > "$source/webui/vendor/node_modules.tar.gz.sha256"
 }
 
 main() {
@@ -50,7 +47,6 @@ main() {
     [ -f "$destination/package.json" ] || fail "sync dropped package.json"
     [ -f "$destination/bun.lock" ] || fail "sync dropped bun.lock"
     [ -f "$destination/src/main.ts" ] || fail "sync dropped src/main.ts"
-    [ -f "$destination/vendor/node_modules.tar.gz" ] || fail "sync dropped vendor archive"
     [ -s "$destination/.source-id" ] || fail "sync did not write .source-id"
     [ ! -e "$destination/dist" ] || fail "sync copied host webui/dist"
     [ ! -e "$destination/node_modules" ] || fail "sync copied host webui/node_modules"

@@ -13,13 +13,6 @@ cd webui
 bun install
 ```
 
-After changing `bun.lock`, regenerate the Linux x64/arm64 vendor archive
-used by image builds (this does not pack your host `node_modules`):
-
-```bash
-./scripts/vendor_webui_deps.sh
-```
-
 Run linting (Biome):
 
 ```bash
@@ -65,7 +58,7 @@ This writes static assets to `webui/dist/`. That directory is gitignored and is 
 
 When `CHIME_WEBD_UI_DIST_DIR` points at that directory, a locally run `chime-webd` serves the built UI instead of the embedded fallback HTML.
 
-Image builds bake this UI into `/usr/local/share/chime-web-ui/dist`. See [Baked web UI](../buildroot/README.md#baked-web-ui) for the package, vendor archive, and on-device paths.
+Image builds bake this UI into `/usr/local/share/chime-web-ui/dist`. See [Baked web UI](../buildroot/README.md#baked-web-ui) for the package, dependency cache, and on-device paths.
 
 To update UI assets on a device that is already flashed, without rebuilding the OS image:
 
