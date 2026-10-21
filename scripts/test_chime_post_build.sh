@@ -6,7 +6,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 POST_BUILD="$PROJECT_DIR/buildroot/board/raspberrypi0w/post_build.sh"
 
 fail() {
-    echo "[test-post-build-web-ui] ERROR: $*" >&2
+    echo "[test-chime-post-build] ERROR: $*" >&2
     exit 1
 }
 
@@ -26,6 +26,7 @@ seed_target() {
     mkdir -p "$target/usr/local/bin" "$target/usr/local/sbin" "$target/etc/init.d" \
         "$target/root/.ssh" "$target/lib/firmware/brcm" "$target/lib/modules" "$target/etc/dropbear"
     printf '#!/bin/sh\n' > "$target/etc/init.d/S49ntp"
+    : > "$target/etc/dropbear/dropbear_ed25519_host_key"
     printf '#!/bin/sh\n' > "$target/usr/local/bin/chime"
     printf '#!/bin/sh\n' > "$target/usr/local/bin/chime-webd"
     chmod 755 "$target/usr/local/bin/chime" "$target/usr/local/bin/chime-webd"
@@ -61,7 +62,7 @@ main() {
     [ "$(readlink "$target/etc/dropbear")" = /etc/persistent/dropbear ] || \
         fail "/etc/dropbear does not point at /etc/persistent/dropbear"
 
-    echo "[test-post-build-web-ui] passed"
+    echo "[test-chime-post-build] passed"
 }
 
 main

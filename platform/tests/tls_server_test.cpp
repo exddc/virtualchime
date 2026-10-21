@@ -2,6 +2,9 @@
 #include <array>
 #include <chrono>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -91,20 +94,51 @@ std::string TlsExchange(const std::string &bind_address, int port, const std::st
     return response;
 }
 
-std::string CertificateOrganization(const std::string &cert_path) {
+std::string CertificateSubject(const std::string &cert_path, int nid) {
     FILE *file = std::fopen(cert_path.c_str(), "r");
     REQUIRE(file != nullptr);
     X509 *cert = PEM_read_X509(file, nullptr, nullptr, nullptr);
     std::fclose(file);
     REQUIRE(cert != nullptr);
-    char organization[256] = {};
-    const int n = X509_NAME_get_text_by_NID(X509_get_subject_name(cert), NID_organizationName, organization,
-                                            sizeof(organization));
+    char text[256] = {};
+    const int n = X509_NAME_get_text_by_NID(X509_get_subject_name(cert), nid, text, sizeof(text));
     X509_free(cert);
     if (n < 0) {
         return {};
     }
-    return std::string(organization);
+    return std::string(text);
+}
+
+std::string CertificateOrganization(const std::string &cert_path) {
+    return CertificateSubject(cert_path, NID_organizationName);
+}
+
+std::string CertificateCommonName(const std::string &cert_path) {
+    return CertificateSubject(cert_path, NID_commonName);
+}
+
+std::string ReadFile(const std::string &path) {
+    std::ifstream in(path, std::ios::binary);
+    return {std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+}
+
+oc::http::TlsServerConfig CertTestConfig(const std::filesystem::path &dir, const std::string &organization,
+                                         const std::string &common_name) {
+    oc::http::TlsServerConfig config;
+    config.bind_address = "127.0.0.1";
+    config.port = 0;
+    config.cert_path = (dir / "cert.pem").string();
+    config.key_path = (dir / "key.pem").string();
+    config.cert_organization = organization;
+    config.cert_common_name = common_name;
+    return config;
+}
+
+void StartAndStop(oc::logging::Logger &logger, const oc::http::TlsServerConfig &config) {
+    oc::http::TlsServer server(logger, config,
+                               [](const oc::http::HttpRequest &) { return oc::http::JsonHttpError(404, "not_found"); });
+    REQUIRE(server.Start());
+    server.Stop();
 }
 
 } // namespace
@@ -265,5 +299,33 @@ TEST_SUITE("tls_server") {
         REQUIRE(server.Start());
         CHECK(CertificateOrganization(config.cert_path) == "Acme Bell Co");
         server.Stop();
+    }
+
+    TEST_CASE("regenerates a generated certificate when the common name changes") {
+        const ScopedTempDir tmp;
+        NullLogger logger;
+        StartAndStop(logger, CertTestConfig(tmp.path(), "OpenChime", "chime.local"));
+        const auto config = CertTestConfig(tmp.path(), "OpenChime", "ring.local");
+        StartAndStop(logger, config);
+        CHECK(CertificateCommonName(config.cert_path) == "ring.local");
+    }
+
+    TEST_CASE("keeps a certificate with the configured common name") {
+        const ScopedTempDir tmp;
+        NullLogger logger;
+        const auto config = CertTestConfig(tmp.path(), "OpenChime", "chime.local");
+        StartAndStop(logger, config);
+        const std::string first = ReadFile(config.cert_path);
+        StartAndStop(logger, config);
+        CHECK(ReadFile(config.cert_path) == first);
+    }
+
+    TEST_CASE("keeps a certificate from another organization") {
+        const ScopedTempDir tmp;
+        NullLogger logger;
+        StartAndStop(logger, CertTestConfig(tmp.path(), "Someone Else", "custom.example"));
+        const auto config = CertTestConfig(tmp.path(), "OpenChime", "chime.local");
+        StartAndStop(logger, config);
+        CHECK(CertificateCommonName(config.cert_path) == "custom.example");
     }
 }

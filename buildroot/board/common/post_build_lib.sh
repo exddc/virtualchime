@@ -57,13 +57,13 @@ oc_fix_ssh_permissions() {
     fi
 }
 
-# S41timesync owns clock sync; the ntp package's daemon would fight its ntpd -q.
-oc_remove_ntpd_service() {
+# Steps every product image needs. The board's S31persistent must bind /data/etc
+# onto /etc/persistent and create /data/etc/dropbear.
+oc_common_post_build() {
+    oc_fix_ssh_permissions
+    # S41timesync owns clock sync; the ntp package's daemon would fight its ntpd -q.
     rm -f "${TARGET_DIR}/etc/init.d/S49ntp"
-}
-
-# Host keys live on /data so they survive OTA rootfs updates.
-oc_persist_dropbear_keys() {
+    # SSH host keys live on /data so they survive OTA rootfs updates.
     rm -rf "${TARGET_DIR}/etc/dropbear"
     ln -sfn /etc/persistent/dropbear "${TARGET_DIR}/etc/dropbear"
 }

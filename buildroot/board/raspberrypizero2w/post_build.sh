@@ -17,9 +17,7 @@ oc_require_executables \
     etc/init.d/S11modules \
     etc/init.d/S16powerlog \
     etc/init.d/S45webd
-oc_fix_ssh_permissions
-oc_remove_ntpd_service
-oc_persist_dropbear_keys
+oc_common_post_build
 
 FIRMWARE_DIR="${TARGET_DIR}/lib/firmware/brcm"
 for chip in 43436 43436s; do

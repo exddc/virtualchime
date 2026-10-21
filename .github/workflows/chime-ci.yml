@@ -144,7 +144,7 @@ jobs:
       - name: Test baked web UI image assertions
         run: |
           bash ./scripts/test_assert_chime_web_ui_dist.sh
-          bash ./scripts/test_post_build_web_ui.sh
+          bash ./scripts/test_chime_post_build.sh
           bash ./scripts/test_ring_post_build.sh
 
       - name: Run chime CI checks

@@ -12,8 +12,9 @@ DAEMON_OPTS="-R -s -g"
 start() {
     printf "Starting %s: " "$DAEMON"
     
-    # Create necessary directories
-    mkdir -p /etc/dropbear
+    if [ ! -d /etc/dropbear ] || [ ! -w /etc/dropbear ]; then
+        echo "WARNING: /etc/dropbear is not a writable directory; host keys cannot be generated"
+    fi
     
     # Check for authorized_keys
     if [ ! -f /root/.ssh/authorized_keys ]; then

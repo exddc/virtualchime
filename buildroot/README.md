@@ -45,13 +45,13 @@ chime/VERSION
 
 `buildroot/version.env`
 ```bash
-OPENCHIME_OS_VERSION=0.3.0
-CHIME_CONFIG_VERSION=6
+OPENCHIME_OS_VERSION=<x.y.z>
+CHIME_CONFIG_VERSION=<n>
 ```
 
 `chime/VERSION`
 ```bash
-1.0.0
+<x.y.z>
 ```
 
 - `OPENCHIME_OS_VERSION`: bump when you build/flash a new OS image. Chime and Ring share it.
@@ -371,7 +371,7 @@ If `date` is still near 1970:
 - dropbear (SSH)
 - udhcpc (DHCP)
 - ntp/ntpd (clock synchronization, run by `S41timesync`)
-- libmosquitto (MQTT client library, no broker)
+- mosquitto client library and `mosquitto_pub`/`mosquitto_sub` (no broker)
 - iw (WiFi debug)
 - brcmfmac firmware (Pi Zero W WiFi)
 - chime and chime-webd
@@ -396,7 +396,7 @@ The build output goes to `buildroot/output/ring/` and to `output-ring/` in the D
 | Area | Ring | Chime |
 |------|------|-------|
 | Root filesystem | Read-only. Logs in RAM (`/var/log` is `/tmp`). | Remounted read-write at boot |
-| Mutable state | `/data` only, through `/etc/persistent` bind mount and build-time symlinks | Symlinks rewritten on rootfs at every boot |
+| Mutable state | `/data` only, through `/etc/persistent` bind mount and build-time symlinks | Config symlinks rewritten on rootfs at every boot; `/etc/dropbear` symlink set at build time |
 | Kernel modules | `kmod` with xz support; `mdev` loads drivers by modalias | `S30modules` decompresses modules on first boot |
 | Bluetooth | Enabled on the PL011 (`krnbt`), `bluetoothd`, `bluetoothctl`, `btmon` | Disabled |
 | Serial console | `ttyS0` (mini-UART), 115200 | `ttyS0`, 115200 |
