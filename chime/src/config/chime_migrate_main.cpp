@@ -26,6 +26,9 @@ int main(int argc, char *argv[]) {
     if (result.rewritten) {
         std::cout << "migrated " << path << " from schema " << result.from_version << " to " << result.to_version
                   << "\n";
+        for (const auto &value : result.replaced_values) {
+            std::cout << "replaced default " << value << "\n";
+        }
     }
     return 0;
 }

@@ -87,7 +87,7 @@ TEST_SUITE("config_constraints") {
                 if (std::string(example.key) == "mqtt_client_id") {
                     CHECK(loaded.config.mqtt_client_id == "chime");
                 } else if (std::string(example.key) == "ring_topic") {
-                    CHECK(loaded.config.ring_topic == "ring/pressed");
+                    CHECK(loaded.config.ring_topic == "ring/+/pressed/#");
                 } else if (std::string(example.key) == "heartbeat_topic") {
                     CHECK(loaded.config.heartbeat_topic == "chime/heartbeat");
                 } else if (std::string(example.key) == "notification_success_sound_path") {

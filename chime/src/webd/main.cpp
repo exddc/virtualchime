@@ -167,6 +167,9 @@ int main(int argc, char *argv[]) {
     } else if (migrated.rewritten) {
         logger.Info("webd", "migrated config schema from " + std::to_string(migrated.from_version) + " to " +
                                 std::to_string(migrated.to_version));
+        for (const auto &value : migrated.replaced_values) {
+            logger.Info("webd", "replaced default " + value);
+        }
     }
 
     const std::string wpa_supplicant_path = EnvOrDefault("CHIME_WEBD_WPA_SUPPLICANT", kWpaSupplicantPath);

@@ -19,13 +19,15 @@ struct MigrateResult {
     bool malformed_version = false;
     int from_version = 0;
     int to_version = 0;
+    std::vector<std::string> replaced_values;
     std::string error;
 };
 
 MigrateResult MigratePersistedConfig(const std::string &path);
 
-void ApplyConfigMigrationSteps(std::vector<oc::config::KvEntry> *document, int from_version, int to_version,
-                               const ConfigMigrationStep *steps, std::size_t step_count);
+std::vector<std::string> ApplyConfigMigrationSteps(std::vector<oc::config::KvEntry> *document, int from_version,
+                                                   int to_version, const ConfigMigrationStep *steps,
+                                                   std::size_t step_count);
 void FillAndRepairKnownFields(std::vector<oc::config::KvEntry> *document);
 
 inline bool MigrateFailureBlocksStartup(const MigrateResult &result) {

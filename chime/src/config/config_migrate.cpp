@@ -54,6 +54,17 @@ void DropRemovedKeys(std::vector<oc::config::KvEntry> *document) {
     }
 }
 
+bool HoldsReplacedDefaults(const std::vector<oc::config::KvEntry> &document, const ConfigMigrationStep &step) {
+    for (std::size_t i = 0; i < step.replace_count; ++i) {
+        const ConfigValueReplaceSpec &replace = step.replaces[i];
+        if (oc::config::KvDocumentHasKey(document, replace.key) &&
+            oc::config::KvDocumentValue(document, replace.key) != replace.from) {
+            return false;
+        }
+    }
+    return true;
+}
+
 std::string PersistentBackupPath(const std::string &path) {
     std::error_code ec;
     std::filesystem::path resolved(path);
@@ -71,10 +82,12 @@ std::string PersistentBackupPath(const std::string &path) {
 
 } // namespace
 
-void ApplyConfigMigrationSteps(std::vector<oc::config::KvEntry> *document, int from_version, int to_version,
-                               const ConfigMigrationStep *steps, std::size_t step_count) {
+std::vector<std::string> ApplyConfigMigrationSteps(std::vector<oc::config::KvEntry> *document, int from_version,
+                                                   int to_version, const ConfigMigrationStep *steps,
+                                                   std::size_t step_count) {
+    std::vector<std::string> replaced;
     if (document == nullptr || steps == nullptr) {
-        return;
+        return replaced;
     }
     for (std::size_t i = 0; i < step_count; ++i) {
         const ConfigMigrationStep &step = steps[i];
@@ -87,7 +100,16 @@ void ApplyConfigMigrationSteps(std::vector<oc::config::KvEntry> *document, int f
         for (std::size_t n = 0; n < step.rename_count; ++n) {
             oc::config::KvDocumentRenameKey(*document, step.renames[n].from, step.renames[n].to);
         }
+        if (!HoldsReplacedDefaults(*document, step)) {
+            continue;
+        }
+        for (std::size_t v = 0; v < step.replace_count; ++v) {
+            const ConfigValueReplaceSpec &replace = step.replaces[v];
+            oc::config::KvDocumentSetValue(*document, replace.key, replace.to);
+            replaced.push_back(std::string(replace.key) + ": " + replace.from + " -> " + replace.to);
+        }
     }
+    return replaced;
 }
 
 void FillAndRepairKnownFields(std::vector<oc::config::KvEntry> *document) {
@@ -131,8 +153,8 @@ MigrateResult MigratePersistedConfig(const std::string &path) {
         return result;
     }
 
-    ApplyConfigMigrationSteps(&document, result.from_version, kConfigSchemaVersion, kConfigMigrationSteps,
-                              std::size(kConfigMigrationSteps));
+    result.replaced_values = ApplyConfigMigrationSteps(&document, result.from_version, kConfigSchemaVersion,
+                                                       kConfigMigrationSteps, std::size(kConfigMigrationSteps));
     FillAndRepairKnownFields(&document);
     const std::string migrated = oc::config::RenderKvDocument(document);
     if (migrated == original) {

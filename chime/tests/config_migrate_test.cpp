@@ -161,17 +161,17 @@ TEST_SUITE("config_migrate") {
         const auto missing = tmp.WriteFile("missing.conf", "mqtt_host=broker\nmqtt_port=1883\n");
         REQUIRE(chime::MigratePersistedConfig(missing.string()).success);
         const auto missing_doc = oc::config::ParseKvDocument(ReadText(missing));
-        CHECK(oc::config::KvDocumentValue(missing_doc, "mqtt_topics") == "ring/pressed,ring/status");
+        CHECK(oc::config::KvDocumentValue(missing_doc, "mqtt_topics") == "ring/+/pressed/#,ring/+/status");
         const auto loaded_missing = chime::LoadConfig(missing.string());
         REQUIRE(loaded_missing);
         REQUIRE(loaded_missing.config.mqtt_topics.size() == 2);
-        CHECK(loaded_missing.config.mqtt_topics[0] == "ring/pressed");
-        CHECK(loaded_missing.config.mqtt_topics[1] == "ring/status");
+        CHECK(loaded_missing.config.mqtt_topics[0] == "ring/+/pressed/#");
+        CHECK(loaded_missing.config.mqtt_topics[1] == "ring/+/status");
 
         const auto empty = tmp.WriteFile("empty.conf", "mqtt_host=broker\nmqtt_port=1883\nmqtt_topics=\n");
         REQUIRE(chime::MigratePersistedConfig(empty.string()).success);
         const auto empty_doc = oc::config::ParseKvDocument(ReadText(empty));
-        CHECK(oc::config::KvDocumentValue(empty_doc, "mqtt_topics") == "ring/pressed,ring/status");
+        CHECK(oc::config::KvDocumentValue(empty_doc, "mqtt_topics") == "ring/+/pressed/#,ring/+/status");
         const auto loaded_empty = chime::LoadConfig(empty.string());
         REQUIRE(loaded_empty);
         REQUIRE(loaded_empty.config.mqtt_topics.size() == 2);
@@ -207,13 +207,58 @@ TEST_SUITE("config_migrate") {
         CHECK(loaded.config.volume_ring == 40);
     }
 
+    TEST_CASE("moves v6 shipped Ring topics to the per-unit scheme") {
+        const ScopedTempDir tmp;
+        const auto path = tmp.WriteFile("v6.conf", "schema_version=6\nmqtt_host=broker\nmqtt_port=1883\n"
+                                                   "mqtt_topics=ring/pressed,ring/status\nring_topic=ring/pressed\n");
+        const auto result = chime::MigratePersistedConfig(path.string());
+        REQUIRE(result.success);
+        CHECK(result.rewritten);
+        const auto loaded = chime::LoadConfig(path.string());
+        REQUIRE(loaded);
+        REQUIRE(loaded.config.mqtt_topics.size() == 2);
+        CHECK(loaded.config.mqtt_topics[0] == "ring/+/pressed/#");
+        CHECK(loaded.config.mqtt_topics[1] == "ring/+/status");
+        CHECK(loaded.config.ring_topic == "ring/+/pressed/#");
+    }
+
+    TEST_CASE("keeps both Ring topics when either one is custom") {
+        const ScopedTempDir tmp;
+        const auto custom_list =
+            tmp.WriteFile("list.conf", "schema_version=6\nmqtt_host=broker\nmqtt_port=1883\n"
+                                       "mqtt_topics=ring/pressed,lab/door\nring_topic=ring/pressed\n");
+        REQUIRE(chime::MigratePersistedConfig(custom_list.string()).success);
+        const auto list_doc = oc::config::ParseKvDocument(ReadText(custom_list));
+        CHECK(oc::config::KvDocumentValue(list_doc, "mqtt_topics") == "ring/pressed,lab/door");
+        CHECK(oc::config::KvDocumentValue(list_doc, "ring_topic") == "ring/pressed");
+
+        const auto custom_filter =
+            tmp.WriteFile("filter.conf", "schema_version=6\nmqtt_host=broker\nmqtt_port=1883\n"
+                                         "mqtt_topics=ring/pressed,ring/status\nring_topic=lab/+\n");
+        REQUIRE(chime::MigratePersistedConfig(custom_filter.string()).success);
+        const auto filter_doc = oc::config::ParseKvDocument(ReadText(custom_filter));
+        CHECK(oc::config::KvDocumentValue(filter_doc, "mqtt_topics") == "ring/pressed,ring/status");
+        CHECK(oc::config::KvDocumentValue(filter_doc, "ring_topic") == "lab/+");
+    }
+
+    TEST_CASE("keeps custom v6 Ring topics") {
+        const ScopedTempDir tmp;
+        const auto path = tmp.WriteFile("v6.conf", "schema_version=6\nmqtt_host=broker\nmqtt_port=1883\n"
+                                                   "mqtt_topics=ring/front/pressed/1,lab/door\n"
+                                                   "ring_topic=ring/front/pressed/1\n");
+        REQUIRE(chime::MigratePersistedConfig(path.string()).success);
+        const auto document = oc::config::ParseKvDocument(ReadText(path));
+        CHECK(oc::config::KvDocumentValue(document, "mqtt_topics") == "ring/front/pressed/1,lab/door");
+        CHECK(oc::config::KvDocumentValue(document, "ring_topic") == "ring/front/pressed/1");
+    }
+
     TEST_CASE("runs every intermediate step on a skipped-version upgrade") {
         const char *remove5[] = {"volume_other"};
         const char *remove6[] = {"lab_flag"};
         const chime::ConfigRenameSpec rename6[] = {{"old_host", "mqtt_host"}};
         const chime::ConfigMigrationStep steps[] = {
-            {5, remove5, 1, nullptr, 0},
-            {6, remove6, 1, rename6, 1},
+            {.to_version = 5, .remove = remove5, .remove_count = 1},
+            {.to_version = 6, .remove = remove6, .remove_count = 1, .renames = rename6, .rename_count = 1},
         };
         auto document = oc::config::ParseKvDocument(
             "old_host=broker.example\nvolume_other=1\nlab_flag=gone\nmqtt_port=1883\nmqtt_topics=a\n");
@@ -222,6 +267,43 @@ TEST_SUITE("config_migrate") {
         CHECK_FALSE(oc::config::KvDocumentHasKey(document, "lab_flag"));
         CHECK_FALSE(oc::config::KvDocumentHasKey(document, "old_host"));
         CHECK(oc::config::KvDocumentValue(document, "mqtt_host") == "broker.example");
+    }
+
+    TEST_CASE("value replacements apply only when every key holds its old value or is missing") {
+        const chime::ConfigRenameSpec rename[] = {{"old_topic", "topic"}};
+        const chime::ConfigValueReplaceSpec replace[] = {{"topic", "a", "b"}, {"filter", "x", "y"}};
+        const chime::ConfigMigrationStep steps[] = {
+            {.to_version = 7, .renames = rename, .rename_count = 1, .replaces = replace, .replace_count = 2},
+        };
+
+        auto renamed = oc::config::ParseKvDocument("old_topic=a\nfilter=x\n");
+        const auto replaced = chime::ApplyConfigMigrationSteps(&renamed, 6, 7, steps, std::size(steps));
+        CHECK(oc::config::KvDocumentValue(renamed, "topic") == "b");
+        CHECK(oc::config::KvDocumentValue(renamed, "filter") == "y");
+        REQUIRE(replaced.size() == 2);
+        CHECK(replaced[0] == "topic: a -> b");
+
+        auto missing = oc::config::ParseKvDocument("topic=a\n");
+        chime::ApplyConfigMigrationSteps(&missing, 6, 7, steps, std::size(steps));
+        CHECK(oc::config::KvDocumentValue(missing, "filter") == "y");
+
+        auto mixed = oc::config::ParseKvDocument("topic=a\nfilter=custom\n");
+        CHECK(chime::ApplyConfigMigrationSteps(&mixed, 6, 7, steps, std::size(steps)).empty());
+        CHECK(oc::config::KvDocumentValue(mixed, "topic") == "a");
+        CHECK(oc::config::KvDocumentValue(mixed, "filter") == "custom");
+    }
+
+    TEST_CASE("unversioned files on the old Ring topics reach the current defaults") {
+        const ScopedTempDir tmp;
+        const auto path =
+            tmp.WriteFile("legacy.conf", "mqtt_host=broker\nmqtt_port=1883\n"
+                                         "mqtt_topics=ring/pressed,ring/status\nring_topic=ring/pressed\n");
+        const auto result = chime::MigratePersistedConfig(path.string());
+        REQUIRE(result.success);
+        CHECK(result.replaced_values.size() == 2);
+        const auto document = oc::config::ParseKvDocument(ReadText(path));
+        CHECK(oc::config::KvDocumentValue(document, "mqtt_topics") == "ring/+/pressed/#,ring/+/status");
+        CHECK(oc::config::KvDocumentValue(document, "ring_topic") == "ring/+/pressed/#");
     }
 
     TEST_CASE("migrates through the S31 symlink without replacing it") {

@@ -3,10 +3,12 @@
 #include <vector>
 
 #include "chime/chime_config.h"
+#include "chime/config_migrate.h"
 #include "chime/generated/config_json.h"
 #include "chime/generated/config_types.h"
 #include "chime/webd_types.h"
 #include "doctest.h"
+#include "oc/config/kv_document.h"
 
 namespace {
 
@@ -31,7 +33,7 @@ chime::webd::SaveRequest ValidApiSaveRequest() {
 
 TEST_SUITE("config_schema_contract") {
     TEST_CASE("schema version matches generated constant") {
-        CHECK(chime::kConfigSchemaVersion == 6);
+        CHECK(chime::kConfigSchemaVersion == 7);
         CHECK(chime::kLegacyUnversionedSchema == 4);
         CHECK(chime::FileConfig{}.schema_version == chime::kConfigSchemaVersion);
     }
@@ -92,6 +94,28 @@ TEST_SUITE("config_schema_contract") {
               chime::kConfigSchemaVersion);
     }
 
+    TEST_CASE("value replacements move old defaults to the schema defaults") {
+        for (const auto &step : chime::kConfigMigrationSteps) {
+            if (step.replace_count == 0) {
+                continue;
+            }
+            std::string text;
+            for (std::size_t i = 0; i < step.replace_count; ++i) {
+                text += std::string(step.replaces[i].key) + "=" + step.replaces[i].from + "\n";
+            }
+            auto document = oc::config::ParseKvDocument(text);
+            chime::ApplyConfigMigrationSteps(&document, step.to_version - 1, step.to_version, &step, 1);
+            for (std::size_t i = 0; i < step.replace_count; ++i) {
+                const auto *field = chime::FindConfigField(step.replaces[i].key);
+                REQUIRE(field != nullptr);
+                CHECK(oc::config::KvDocumentValue(document, step.replaces[i].key) == step.replaces[i].to);
+                if (step.to_version == chime::kConfigSchemaVersion) {
+                    CHECK(std::string(step.replaces[i].to) == field->repair_text);
+                }
+            }
+        }
+    }
+
     TEST_CASE("schema field specs expose API validation metadata") {
         const auto *host = chime::FindConfigField("mqtt_host");
         REQUIRE(host != nullptr);
@@ -105,7 +129,7 @@ TEST_SUITE("config_schema_contract") {
         REQUIRE(volume != nullptr);
         CHECK(volume->min_value == 0);
         CHECK(volume->max_value == 100);
-        CHECK(std::string(chime::FindConfigField("mqtt_topics")->repair_text) == "ring/pressed,ring/status");
+        CHECK(std::string(chime::FindConfigField("mqtt_topics")->repair_text) == "ring/+/pressed/#,ring/+/status");
         CHECK(std::string(chime::FindConfigField("mqtt_topics")->default_text).empty());
     }
 

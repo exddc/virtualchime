@@ -135,7 +135,7 @@ Requirements only. The OS image that implements the platform, boot GPIO, audio, 
 | Bluetooth unlock | LE Secure Connections plus application challenge-response with a per-device key and rolling counter; RSSI threshold with hysteresis and dwell; intent gating; rate limit; audit log |
 | Local fallback | Acknowledgement sound plays when the broker is unreachable |
 
-The Chime `ring_topic` filter must match the chosen unit and suffix, for example `ring/<unit>/pressed/1` or `ring/+/pressed/#`; the shipped exact-match `ring/pressed` does not.
+The Chime default `ring_topic` filter `ring/+/pressed/#` matches every unit and button. Narrow it to `ring/<unit>/pressed/1` to ring for one button only.
 
 ## Enclosure constraints
 

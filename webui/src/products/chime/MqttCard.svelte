@@ -132,7 +132,7 @@
   <p class="hint">Client cert/key are optional, but must be provided together.</p>
 
   <label for="mqtt_topics">Subscribe Topics (comma-separated)</label>
-  <input id="mqtt_topics" bind:value={mqttTopics} placeholder="ring/pressed,ring/status" />
+  <input id="mqtt_topics" bind:value={mqttTopics} placeholder="ring/+/pressed/#,ring/+/status" />
 
   <div class="button-row">
     {#if showRetry}

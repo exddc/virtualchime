@@ -6,7 +6,7 @@ set -euo pipefail
 # Optional env auth:
 #   MQTT_USERNAME=... MQTT_PASSWORD=...
 
-TOPIC="${1:-ring/pressed}"
+TOPIC="${1:-ring/front/pressed/1}"
 PAYLOAD="${2:-pressed}"
 BROKER="${3:-}"
 PORT="${4:-1883}"
