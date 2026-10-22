@@ -101,6 +101,9 @@ int main(int argc, char *argv[]) {
     } else if (migrated.rewritten) {
         logger.Info("chime", "migrated config schema from " + std::to_string(migrated.from_version) + " to " +
                                  std::to_string(migrated.to_version));
+        for (const auto &value : migrated.replaced_values) {
+            logger.Info("chime", "replaced default " + value);
+        }
     }
 
     auto result = chime::LoadConfig(config_path);

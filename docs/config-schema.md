@@ -1,6 +1,6 @@
 # Chime config schema
 
-Product schema version **6**. `buildroot/version.env` `CHIME_CONFIG_VERSION` is the release-level gate and must equal this integer. The persisted file key is `schema_version`.
+Product schema version **7**. `buildroot/version.env` `CHIME_CONFIG_VERSION` is the release-level gate and must equal this integer. The persisted file key is `schema_version`.
 
 Source of truth: `schema/chime_config.json`. Generated artifacts:
 
@@ -23,13 +23,13 @@ Regenerate with `python3 scripts/gen_chime_config_schema.py`. `scripts/check_con
 
 Unknown assignment keys: **preserve**. Unknown assignment keys and comments are kept as written. Removed keys are dropped. Missing known keys are filled with schema defaults during migration.
 
-`volume_bell` is renamed to `volume_ring` in this version. Ring volume is `volume_ring`; notification volume is `volume_notifications`. Shipped MQTT topics are `ring/pressed` and `ring/status`; `ring_topic` defaults to `ring/pressed`. Existing files keep their topics.
+Files that still hold every old default are migrated: `mqtt_topics` from `ring/pressed,ring/status` to `ring/+/pressed/#,ring/+/status`; `ring_topic` from `ring/pressed` to `ring/+/pressed/#`. Custom values are kept. Ring volume is `volume_ring`; notification volume is `volume_notifications`. Shipped MQTT topics follow Ring's `ring/<unit>/pressed/<n>` and `ring/<unit>/status` scheme.
 
 ## Key inventory
 
 | Key | Owner | Type | Default | Required | Valid range | Secret | Persist | Role | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `schema_version` | schema | int | `6` | optional | 1-1000000 | no | file | schema | Persisted product schema version. Written by chime-migrate. Distinct from CHIME_CONFIG_VERSION in buildroot/version.env, which must equal this integer. |
+| `schema_version` | schema | int | `7` | optional | 1-1000000 | no | file | schema | Persisted product schema version. Written by chime-migrate. Distinct from CHIME_CONFIG_VERSION in buildroot/version.env, which must equal this integer. |
 | `mqtt_host` | runtime,webd | string | `` | required | max 256 chars, no whitespace | no | file | runtime/webd/ui | Empty in the file means the broker is not configured; the daemon waits. Saving from the UI requires a non-empty host. |
 | `mqtt_port` | runtime,webd | int | `1883` | required | 1-65535 | no | file | runtime/webd/ui |  |
 | `mqtt_client_id` | runtime,webd | string | `chime` | required | max 128 chars | no | file | runtime/webd/ui |  |
@@ -40,7 +40,7 @@ Unknown assignment keys: **preserve**. Unknown assignment keys and comments are 
 | `mqtt_tls_ca_file` | runtime,webd | string | `` | required | max 256 chars | no | file | runtime/webd/ui |  |
 | `mqtt_tls_cert_file` | runtime,webd | string | `` | required | max 256 chars | no | file | runtime/webd/ui | Must be set together with mqtt_tls_key_file. |
 | `mqtt_tls_key_file` | runtime,webd | string | `` | required | max 256 chars | no | file | runtime/webd/ui | Must be set together with mqtt_tls_cert_file. Path only; the key material is not stored in chime.conf. |
-| `mqtt_topics` | runtime,webd | csv | ` (shipped ring/pressed,ring/status)` | required | comma-separated non-empty tokens | no | file | runtime/webd/ui | Shipped subscribe list uses product/event names. ring/pressed is the Ring press; ring/status is reserved for Ring status. Existing files keep their topics. |
+| `mqtt_topics` | runtime,webd | csv | ` (shipped ring/+/pressed/#,ring/+/status)` | required | comma-separated non-empty tokens | no | file | runtime/webd/ui | Shipped subscribe list matches every Ring unit: ring/+/pressed/# for presses (any button), ring/+/status for status. |
 | `mqtt_subscribe_qos` | runtime | int | `0` | optional | 0-2 | no | file | runtime | Not exposed in the web UI. Operators edit the file directly. |
 | `heartbeat_interval` | runtime | int | `60 (shipped 20)` | optional | 0-3600 | no | file | runtime | Seconds; 0 disables. Omitted-key default is 60. The image ships 20. |
 | `heartbeat_topic` | runtime | string | `chime/heartbeat` | optional | max 256 chars | no | file | runtime | Chime reports it is alive. Default chime/heartbeat. Not exposed in the web UI. |
@@ -49,7 +49,7 @@ Unknown assignment keys: **preserve**. Unknown assignment keys and comments are 
 | `time_sync_retries` | init | int | `6` | optional | 1-100 | no | file | init-only | Init-only. S41timesync falls back to this default when the value is missing or invalid. |
 | `time_sync_retry_delay` | init | int | `5` | optional | 1-3600 | no | file | init-only | Init-only seconds between startup time-sync attempts. |
 | `time_sync_interval` | init | int | `3600` | optional | 0-86400 | no | file | init-only | Init-only. 0 disables periodic resync. |
-| `ring_topic` | runtime,webd | string | `ring/pressed` | required | max 256 chars, no whitespace | no | file | runtime/webd/ui | Filter that triggers audio. Shipped default is ring/pressed (Ring reports a press). Payload has no required schema. Existing files keep their topic. |
+| `ring_topic` | runtime,webd | string | `ring/+/pressed/#` | required | max 256 chars, no whitespace | no | file | runtime/webd/ui | Filter that triggers audio. Default ring/+/pressed/# matches any button on any Ring unit. Payload has no required schema. |
 | `sound_path` | runtime | string | `/usr/local/share/chime/ring.wav` | optional | max 256 chars | no | file | runtime | Ring WAV path. The UI replaces the file via /api/v1/ring/sounds rather than editing this key. |
 | `notification_success_sound_path` | runtime,webd | string | `/usr/local/share/chime/test.wav` | optional | max 256 chars | no | file | runtime/webd/ui |  |
 | `notification_failure_sound_path` | runtime,webd | string | `/usr/local/share/chime/ring.wav` | optional | max 256 chars | no | file | runtime/webd/ui |  |

@@ -186,7 +186,7 @@ def invalid_value_examples() -> list[tuple[str, str]]:
     return [
         ("mqtt_host", "bad host"),
         ("mqtt_client_id", "x" * 129),
-        ("ring_topic", "ring/pressed\ninjected"),
+        ("ring_topic", "ring/+/pressed/#\ninjected"),
         ("mqtt_topics", "bad topic"),
         ("heartbeat_topic", "chime/heartbeat\n"),
         ("notification_success_sound_path", ""),
@@ -209,26 +209,31 @@ def generate_migration_cpp(schema: dict[str, Any]) -> tuple[str, str, list[str]]
         to = int(mig["to"])
         remove = list(mig.get("remove") or [])
         renames = list(mig.get("rename") or [])
-        remove_ptr = "nullptr"
-        remove_count = "0"
+        replaces = list(mig.get("replace") or [])
+        fields = [f".to_version = {to}"]
         if remove:
             name = f"kConfigMigrationRemove{to}"
             inner = ", ".join(cpp_string_literal(key) for key in remove)
             arrays.append(f"inline constexpr const char *{name}[] = {{{inner}}};")
-            remove_ptr = name
-            remove_count = str(len(remove))
+            fields += [f".remove = {name}", f".remove_count = {len(remove)}"]
             removed_keys.extend(remove)
-        rename_ptr = "nullptr"
-        rename_count = "0"
         if renames:
             name = f"kConfigMigrationRename{to}"
             inner = ", ".join(
                 f"{{{cpp_string_literal(item['from'])}, {cpp_string_literal(item['to'])}}}" for item in renames
             )
             arrays.append(f"inline constexpr ConfigRenameSpec {name}[] = {{{inner}}};")
-            rename_ptr = name
-            rename_count = str(len(renames))
-        steps.append(f"    {{{to}, {remove_ptr}, {remove_count}, {rename_ptr}, {rename_count}}}")
+            fields += [f".renames = {name}", f".rename_count = {len(renames)}"]
+        if replaces:
+            name = f"kConfigMigrationReplace{to}"
+            inner = ", ".join(
+                f"{{{cpp_string_literal(item['key'])}, {cpp_string_literal(item['from'])}, "
+                f"{cpp_string_literal(item['to'])}}}"
+                for item in replaces
+            )
+            arrays.append(f"inline constexpr ConfigValueReplaceSpec {name}[] = {{{inner}}};")
+            fields += [f".replaces = {name}", f".replace_count = {len(replaces)}"]
+        steps.append(f"    {{{', '.join(fields)}}}")
     unique_removed: list[str] = []
     for key in removed_keys:
         if key not in unique_removed:
@@ -332,12 +337,20 @@ struct ConfigRenameSpec {{
     const char *to;
 }};
 
+struct ConfigValueReplaceSpec {{
+    const char *key;
+    const char *from;
+    const char *to;
+}};
+
 struct ConfigMigrationStep {{
-    int to_version;
-    const char *const *remove;
-    std::size_t remove_count;
-    const ConfigRenameSpec *renames;
-    std::size_t rename_count;
+    int to_version = 0;
+    const char *const *remove = nullptr;
+    std::size_t remove_count = 0;
+    const ConfigRenameSpec *renames = nullptr;
+    std::size_t rename_count = 0;
+    const ConfigValueReplaceSpec *replaces = nullptr;
+    std::size_t replace_count = 0;
 }};
 
 struct ConfigInvalidValueExample {{
@@ -705,12 +718,7 @@ def inventory_row(field: dict[str, Any]) -> str:
         valid = ", ".join(bits) if bits else "any string"
     default = default_text(field)
     if "shipped" in field:
-        shipped = field["shipped"]
-        if isinstance(shipped, list):
-            shipped_text = ",".join(str(item) for item in shipped)
-        else:
-            shipped_text = str(shipped)
-        default_cell = f"{default} (shipped {shipped_text})"
+        default_cell = f"{default} (shipped {shipped_text(field)})"
     else:
         default_cell = default
     owners = ",".join(field.get("owners") or [])
@@ -745,6 +753,10 @@ def current_version_notes(schema: dict[str, Any]) -> str:
             continue
         for item in mig.get("rename") or []:
             bits.append(f"`{item['from']}` is renamed to `{item['to']}` in this version.")
+        replaces = mig.get("replace") or []
+        if replaces:
+            moves = "; ".join(f"`{item['key']}` from `{item['from']}` to `{item['to']}`" for item in replaces)
+            bits.append(f"Files that still hold every old default are migrated: {moves}. Custom values are kept.")
     extra = schema.get("version_notes")
     if extra:
         bits.append(str(extra))
@@ -892,10 +904,12 @@ def generate_contract_test(schema: dict[str, Any]) -> str:
 #include <vector>
 
 #include "chime/chime_config.h"
+#include "chime/config_migrate.h"
 #include "chime/generated/config_json.h"
 #include "chime/generated/config_types.h"
 #include "chime/webd_types.h"
 #include "doctest.h"
+#include "oc/config/kv_document.h"
 
 namespace {{
 
@@ -952,6 +966,28 @@ TEST_SUITE("config_schema_contract") {{
               chime::kConfigSchemaVersion);
     }}
 
+    TEST_CASE("value replacements move old defaults to the schema defaults") {{
+        for (const auto &step : chime::kConfigMigrationSteps) {{
+            if (step.replace_count == 0) {{
+                continue;
+            }}
+            std::string text;
+            for (std::size_t i = 0; i < step.replace_count; ++i) {{
+                text += std::string(step.replaces[i].key) + "=" + step.replaces[i].from + "\\n";
+            }}
+            auto document = oc::config::ParseKvDocument(text);
+            chime::ApplyConfigMigrationSteps(&document, step.to_version - 1, step.to_version, &step, 1);
+            for (std::size_t i = 0; i < step.replace_count; ++i) {{
+                const auto *field = chime::FindConfigField(step.replaces[i].key);
+                REQUIRE(field != nullptr);
+                CHECK(oc::config::KvDocumentValue(document, step.replaces[i].key) == step.replaces[i].to);
+                if (step.to_version == chime::kConfigSchemaVersion) {{
+                    CHECK(std::string(step.replaces[i].to) == field->repair_text);
+                }}
+            }}
+        }}
+    }}
+
     TEST_CASE("schema field specs expose API validation metadata") {{
         const auto *host = chime::FindConfigField("mqtt_host");
         REQUIRE(host != nullptr);
@@ -965,7 +1001,7 @@ TEST_SUITE("config_schema_contract") {{
         REQUIRE(volume != nullptr);
         CHECK(volume->min_value == 0);
         CHECK(volume->max_value == 100);
-        CHECK(std::string(chime::FindConfigField("mqtt_topics")->repair_text) == "ring/pressed,ring/status");
+        CHECK(std::string(chime::FindConfigField("mqtt_topics")->repair_text) == "ring/+/pressed/#,ring/+/status");
         CHECK(std::string(chime::FindConfigField("mqtt_topics")->default_text).empty());
     }}
 
@@ -1059,6 +1095,15 @@ def read_shell_default(path: Path, name: str) -> str:
     raise KeyError(name)
 
 
+def shipped_text(field: dict[str, Any]) -> str:
+    value = field["shipped"] if "shipped" in field else field["default"]
+    if isinstance(value, list):
+        return ",".join(str(item) for item in value)
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    return str(value)
+
+
 def check_product(schema: dict[str, Any]) -> int:
     failed = False
     version_text = (REPO / "buildroot" / "version.env").read_text(encoding="utf-8")
@@ -1096,6 +1141,27 @@ def check_product(schema: dict[str, Any]) -> int:
                     file=sys.stderr,
                 )
                 failed = True
+        file_fields = {field["key"]: field for field in schema["fields"] if field.get("persist") == "file"}
+        for item in migrations:
+            current = int(item["to"]) == schema["schema_version"]
+            for replace in item.get("replace") or []:
+                field = file_fields.get(replace["key"])
+                if not replace["from"] or replace["from"] == replace["to"]:
+                    print(
+                        f"migrations to {item['to']} replace {replace['key']} needs a non-empty from != to",
+                        file=sys.stderr,
+                    )
+                    failed = True
+                if field is None:
+                    print(f"migrations to {item['to']} replace unknown key {replace['key']!r}", file=sys.stderr)
+                    failed = True
+                elif current and replace["to"] != shipped_text(field):
+                    print(
+                        f"migrations to {item['to']} replace {replace['key']} to {replace['to']!r} "
+                        f"!= schema shipped {shipped_text(field)!r}",
+                        file=sys.stderr,
+                    )
+                    failed = True
 
     conf_path = REPO / "buildroot" / "board" / "raspberrypi0w" / "rootfs_overlay" / "etc" / "chime.conf"
     shipped = conf_keys(conf_path)
@@ -1115,13 +1181,7 @@ def check_product(schema: dict[str, Any]) -> int:
         key = field["key"]
         if key not in shipped:
             continue
-        shipped_value = field["shipped"] if "shipped" in field else field["default"]
-        if isinstance(shipped_value, list):
-            expected = ",".join(str(item) for item in shipped_value)
-        elif isinstance(shipped_value, bool):
-            expected = "true" if shipped_value else "false"
-        else:
-            expected = str(shipped_value)
+        expected = shipped_text(field)
         if shipped[key] != expected:
             print(f"chime.conf {key}={shipped[key]!r} != schema shipped {expected!r}", file=sys.stderr)
             failed = True

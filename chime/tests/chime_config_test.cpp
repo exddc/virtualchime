@@ -5,7 +5,7 @@
 namespace {
 
 std::string RequiredKeys() {
-    return "mqtt_host=broker.local\nmqtt_port=1883\nmqtt_topics=ring/pressed,ring/status\n";
+    return "mqtt_host=broker.local\nmqtt_port=1883\nmqtt_topics=ring/+/pressed/#,ring/+/status\n";
 }
 
 } // namespace
@@ -19,8 +19,8 @@ TEST_SUITE("chime_config") {
         CHECK(result.config.mqtt_host == "broker.local");
         CHECK(result.config.mqtt_port == 1883);
         REQUIRE(result.config.mqtt_topics.size() == 2);
-        CHECK(result.config.mqtt_topics[0] == "ring/pressed");
-        CHECK(result.config.mqtt_topics[1] == "ring/status");
+        CHECK(result.config.mqtt_topics[0] == "ring/+/pressed/#");
+        CHECK(result.config.mqtt_topics[1] == "ring/+/status");
         CHECK(result.config.mqtt_client_id == "chime");
         CHECK(result.config.mqtt_username.empty());
         CHECK(result.config.mqtt_password.empty());
@@ -29,7 +29,7 @@ TEST_SUITE("chime_config") {
         CHECK(result.config.mqtt_subscribe_qos == 0);
         CHECK(result.config.heartbeat_interval == 60);
         CHECK(result.config.heartbeat_topic == "chime/heartbeat");
-        CHECK(result.config.ring_topic == "ring/pressed");
+        CHECK(result.config.ring_topic == "ring/+/pressed/#");
         CHECK(result.config.sound_path == "/usr/local/share/chime/ring.wav");
         CHECK(result.config.notification_success_sound_path == "/usr/local/share/chime/test.wav");
         CHECK(result.config.notification_failure_sound_path == "/usr/local/share/chime/ring.wav");

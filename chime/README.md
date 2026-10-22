@@ -42,7 +42,7 @@ For repository-wide formatting/lint checks (C/C++ + webui Biome), run:
 1. Loads config from `/etc/chime.conf` (or `$CHIME_CONFIG`).
 2. If `mqtt_host` is empty, waits without connecting and logs that MQTT is not configured. `chime-webd` remains available for setup.
 3. Otherwise connects to the MQTT broker and subscribes to configured topics.
-4. When a message arrives on `ring_topic` (shipped `ring/pressed`), plays `sound_path` using `aplay`.
+4. When a message arrives on `ring_topic` (shipped `ring/+/pressed/#`), plays `sound_path` using `aplay`.
 5. Publishes `heartbeat_topic` (shipped `chime/heartbeat`) every `heartbeat_interval` seconds.
 6. Automatically reconnects to MQTT after disconnect or loop errors.
 
@@ -104,13 +104,13 @@ Daemon keys:
 - `mqtt_username`, `mqtt_password` (optional broker auth; password is redacted on API reads)
 - `mqtt_tls_enabled`, `mqtt_tls_validate_certificate`
 - `mqtt_tls_ca_file`, `mqtt_tls_cert_file`, `mqtt_tls_key_file`
-- `mqtt_topics` (comma-separated; shipped `ring/pressed,ring/status`)
+- `mqtt_topics` (comma-separated; shipped `ring/+/pressed/#,ring/+/status`)
 - `mqtt_subscribe_qos` (0-2)
 - `heartbeat_interval` (0 disables)
 - `heartbeat_topic` (shipped `chime/heartbeat`)
-- `ring_topic` (shipped `ring/pressed`: Ring reports a press)
+- `ring_topic` (shipped `ring/+/pressed/#`: any button on any Ring unit)
   - Supports MQTT topic filters (`+` and `#`) for matching incoming message topics
-  - Existing files keep their topic; do not rewrite live `doorbell/…` contracts
+  - Migration moves only the old shipped `ring/pressed` value; custom topics are kept
 - `sound_path`
 - `volume_ring` (0-100, ring events)
 - `volume_notifications` (0-100, startup/notification playback)

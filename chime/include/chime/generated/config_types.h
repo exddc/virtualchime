@@ -11,7 +11,7 @@
 
 namespace chime {
 
-constexpr int kConfigSchemaVersion = 6;
+constexpr int kConfigSchemaVersion = 7;
 constexpr int kLegacyUnversionedSchema = 4;
 
 enum class ConfigValueType { kString, kInt, kBool, kCsv };
@@ -44,12 +44,20 @@ struct ConfigRenameSpec {
     const char *to;
 };
 
+struct ConfigValueReplaceSpec {
+    const char *key;
+    const char *from;
+    const char *to;
+};
+
 struct ConfigMigrationStep {
-    int to_version;
-    const char *const *remove;
-    std::size_t remove_count;
-    const ConfigRenameSpec *renames;
-    std::size_t rename_count;
+    int to_version = 0;
+    const char *const *remove = nullptr;
+    std::size_t remove_count = 0;
+    const ConfigRenameSpec *renames = nullptr;
+    std::size_t rename_count = 0;
+    const ConfigValueReplaceSpec *replaces = nullptr;
+    std::size_t replace_count = 0;
 };
 
 struct ConfigInvalidValueExample {
@@ -58,7 +66,7 @@ struct ConfigInvalidValueExample {
 };
 
 constexpr ConfigFieldSpec kAllConfigFields[] = {
-    {"schema_version", ConfigValueType::kInt, "6", "6", ConfigPersist::kFile, false, false, false, false, false, false, false, false, false, false, 1, 1000000, 0, 0},
+    {"schema_version", ConfigValueType::kInt, "7", "7", ConfigPersist::kFile, false, false, false, false, false, false, false, false, false, false, 1, 1000000, 0, 0},
     {"mqtt_host", ConfigValueType::kString, "", "", ConfigPersist::kFile, true, true, true, false, false, true, true, false, true, true, 0, 0, 0, 256},
     {"mqtt_port", ConfigValueType::kInt, "1883", "1883", ConfigPersist::kFile, true, true, true, false, false, true, true, false, false, false, 1, 65535, 0, 0},
     {"mqtt_client_id", ConfigValueType::kString, "chime", "chime", ConfigPersist::kFile, true, true, true, false, false, false, true, false, false, true, 0, 0, 0, 128},
@@ -69,7 +77,7 @@ constexpr ConfigFieldSpec kAllConfigFields[] = {
     {"mqtt_tls_ca_file", ConfigValueType::kString, "", "", ConfigPersist::kFile, true, true, true, false, false, false, true, true, false, true, 0, 0, 0, 256},
     {"mqtt_tls_cert_file", ConfigValueType::kString, "", "", ConfigPersist::kFile, true, true, true, false, false, false, true, true, false, true, 0, 0, 0, 256},
     {"mqtt_tls_key_file", ConfigValueType::kString, "", "", ConfigPersist::kFile, true, true, true, false, false, false, true, true, false, true, 0, 0, 0, 256},
-    {"mqtt_topics", ConfigValueType::kCsv, "", "ring/pressed,ring/status", ConfigPersist::kFile, true, true, true, false, false, true, true, false, true, true, 0, 0, 0, 0},
+    {"mqtt_topics", ConfigValueType::kCsv, "", "ring/+/pressed/#,ring/+/status", ConfigPersist::kFile, true, true, true, false, false, true, true, false, true, true, 0, 0, 0, 0},
     {"mqtt_subscribe_qos", ConfigValueType::kInt, "0", "0", ConfigPersist::kFile, true, false, false, false, false, false, false, false, false, false, 0, 2, 0, 0},
     {"heartbeat_interval", ConfigValueType::kInt, "60", "60", ConfigPersist::kFile, true, false, false, false, false, false, false, false, false, false, 0, 3600, 0, 0},
     {"heartbeat_topic", ConfigValueType::kString, "chime/heartbeat", "chime/heartbeat", ConfigPersist::kFile, true, false, false, false, false, false, false, false, false, true, 0, 0, 0, 256},
@@ -78,7 +86,7 @@ constexpr ConfigFieldSpec kAllConfigFields[] = {
     {"time_sync_retries", ConfigValueType::kInt, "6", "6", ConfigPersist::kFile, false, false, false, true, false, false, false, false, false, false, 1, 100, 0, 0},
     {"time_sync_retry_delay", ConfigValueType::kInt, "5", "5", ConfigPersist::kFile, false, false, false, true, false, false, false, false, false, false, 1, 3600, 0, 0},
     {"time_sync_interval", ConfigValueType::kInt, "3600", "3600", ConfigPersist::kFile, false, false, false, true, false, false, false, false, false, false, 0, 86400, 0, 0},
-    {"ring_topic", ConfigValueType::kString, "ring/pressed", "ring/pressed", ConfigPersist::kFile, true, true, true, false, false, false, true, false, true, true, 0, 0, 0, 256},
+    {"ring_topic", ConfigValueType::kString, "ring/+/pressed/#", "ring/+/pressed/#", ConfigPersist::kFile, true, true, true, false, false, false, true, false, true, true, 0, 0, 0, 256},
     {"sound_path", ConfigValueType::kString, "/usr/local/share/chime/ring.wav", "/usr/local/share/chime/ring.wav", ConfigPersist::kFile, true, false, false, false, false, false, false, false, false, true, 0, 0, 0, 256},
     {"notification_success_sound_path", ConfigValueType::kString, "/usr/local/share/chime/test.wav", "/usr/local/share/chime/test.wav", ConfigPersist::kFile, true, true, true, false, false, false, false, false, false, true, 0, 0, 1, 256},
     {"notification_failure_sound_path", ConfigValueType::kString, "/usr/local/share/chime/ring.wav", "/usr/local/share/chime/ring.wav", ConfigPersist::kFile, true, true, true, false, false, false, false, false, false, true, 0, 0, 1, 256},
@@ -98,16 +106,18 @@ inline constexpr const char *kRemovedConfigKeys[] = {"volume_other"};
 
 inline constexpr const char *kConfigMigrationRemove5[] = {"volume_other"};
 inline constexpr ConfigRenameSpec kConfigMigrationRename6[] = {{"volume_bell", "volume_ring"}};
+inline constexpr ConfigValueReplaceSpec kConfigMigrationReplace7[] = {{"mqtt_topics", "ring/pressed,ring/status", "ring/+/pressed/#,ring/+/status"}, {"ring_topic", "ring/pressed", "ring/+/pressed/#"}};
 
 inline constexpr ConfigMigrationStep kConfigMigrationSteps[] = {
-    {5, kConfigMigrationRemove5, 1, nullptr, 0},
-    {6, nullptr, 0, kConfigMigrationRename6, 1}
+    {.to_version = 5, .remove = kConfigMigrationRemove5, .remove_count = 1},
+    {.to_version = 6, .renames = kConfigMigrationRename6, .rename_count = 1},
+    {.to_version = 7, .replaces = kConfigMigrationReplace7, .replace_count = 2}
 };
 
 inline constexpr ConfigInvalidValueExample kConfigInvalidValueExamples[] = {
     {"mqtt_host", "bad host"},
     {"mqtt_client_id", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"},
-    {"ring_topic", "ring/pressed\ninjected"},
+    {"ring_topic", "ring/+/pressed/#\ninjected"},
     {"mqtt_topics", "bad topic"},
     {"heartbeat_topic", "chime/heartbeat\n"},
     {"notification_success_sound_path", ""}
@@ -163,7 +173,7 @@ struct ChimeConfig {
     int mqtt_subscribe_qos = 0;
     int heartbeat_interval = 60;
     std::string heartbeat_topic = "chime/heartbeat";
-    std::string ring_topic = "ring/pressed";
+    std::string ring_topic = "ring/+/pressed/#";
     std::string sound_path = "/usr/local/share/chime/ring.wav";
     std::string notification_success_sound_path = "/usr/local/share/chime/test.wav";
     std::string notification_failure_sound_path = "/usr/local/share/chime/ring.wav";
@@ -201,7 +211,7 @@ inline const oc::config::Field<ChimeConfig> kChimeConfigFields[] = {
 };
 
 struct FileConfig {
-    int schema_version = 6;
+    int schema_version = 7;
     std::string mqtt_host{};
     int mqtt_port = 1883;
     std::string mqtt_client_id = "chime";
@@ -221,7 +231,7 @@ struct FileConfig {
     int time_sync_retries = 6;
     int time_sync_retry_delay = 5;
     int time_sync_interval = 3600;
-    std::string ring_topic = "ring/pressed";
+    std::string ring_topic = "ring/+/pressed/#";
     std::string sound_path = "/usr/local/share/chime/ring.wav";
     std::string notification_success_sound_path = "/usr/local/share/chime/test.wav";
     std::string notification_failure_sound_path = "/usr/local/share/chime/ring.wav";
@@ -284,7 +294,7 @@ struct CoreConfig {
     std::string mqtt_tls_cert_file{};
     std::string mqtt_tls_key_file{};
     std::vector<std::string> mqtt_topics{};
-    std::string ring_topic = "ring/pressed";
+    std::string ring_topic = "ring/+/pressed/#";
     std::string notification_success_sound_path = "/usr/local/share/chime/test.wav";
     std::string notification_failure_sound_path = "/usr/local/share/chime/ring.wav";
     int volume_ring = 80;

@@ -1,7 +1,7 @@
 {
-  "schema_version": 6,
+  "schema_version": 7,
   "legacy_unversioned": 4,
-  "version_notes": "Ring volume is `volume_ring`; notification volume is `volume_notifications`. Shipped MQTT topics are `ring/pressed` and `ring/status`; `ring_topic` defaults to `ring/pressed`. Existing files keep their topics.",
+  "version_notes": "Ring volume is `volume_ring`; notification volume is `volume_notifications`. Shipped MQTT topics follow Ring's `ring/<unit>/pressed/<n>` and `ring/<unit>/status` scheme.",
   "unknown_key_policy": "preserve",
   "unknown_key_policy_notes": "Unknown assignment keys and comments are kept as written. Removed keys are dropped. Missing known keys are filled with schema defaults during migration.",
   "removed": {
@@ -11,7 +11,8 @@
         "reason": "Persisted and shown in the UI but never consumed by the audio path. Ring playback uses volume_ring; notification playback uses volume_notifications. There is no third audio category."
       }
     ],
-    "6": []
+    "6": [],
+    "7": []
   },
   "migrations": [
     {
@@ -23,13 +24,22 @@
       "to": 6,
       "remove": [],
       "rename": [{ "from": "volume_bell", "to": "volume_ring" }]
+    },
+    {
+      "to": 7,
+      "remove": [],
+      "rename": [],
+      "replace": [
+        { "key": "mqtt_topics", "from": "ring/pressed,ring/status", "to": "ring/+/pressed/#,ring/+/status" },
+        { "key": "ring_topic", "from": "ring/pressed", "to": "ring/+/pressed/#" }
+      ]
     }
   ],
   "fields": [
     {
       "key": "schema_version",
       "type": "int",
-      "default": 6,
+      "default": 7,
       "persist": "file",
       "runtime": false,
       "api": false,
@@ -229,7 +239,7 @@
       "key": "mqtt_topics",
       "type": "csv",
       "default": [],
-      "shipped": ["ring/pressed", "ring/status"],
+      "shipped": ["ring/+/pressed/#", "ring/+/status"],
       "persist": "file",
       "runtime": true,
       "api": true,
@@ -242,7 +252,7 @@
       "forbid_whitespace": true,
       "owners": ["runtime", "webd"],
       "consumers": ["runtime", "webd", "ui"],
-      "notes": "Shipped subscribe list uses product/event names. ring/pressed is the Ring press; ring/status is reserved for Ring status. Existing files keep their topics."
+      "notes": "Shipped subscribe list matches every Ring unit: ring/+/pressed/# for presses (any button), ring/+/status for status."
     },
     {
       "key": "mqtt_subscribe_qos",
@@ -383,7 +393,7 @@
     {
       "key": "ring_topic",
       "type": "string",
-      "default": "ring/pressed",
+      "default": "ring/+/pressed/#",
       "persist": "file",
       "runtime": true,
       "api": true,
@@ -398,7 +408,7 @@
       "forbid_whitespace": true,
       "owners": ["runtime", "webd"],
       "consumers": ["runtime", "webd", "ui"],
-      "notes": "Filter that triggers audio. Shipped default is ring/pressed (Ring reports a press). Payload has no required schema. Existing files keep their topic."
+      "notes": "Filter that triggers audio. Default ring/+/pressed/# matches any button on any Ring unit. Payload has no required schema."
     },
     {
       "key": "sound_path",

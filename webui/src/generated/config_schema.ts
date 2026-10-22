@@ -1,4 +1,4 @@
-export const CONFIG_SCHEMA_VERSION = 6 as const;
+export const CONFIG_SCHEMA_VERSION = 7 as const;
 
 export type CoreConfigFields = {
   mqtt_host: string;
@@ -30,7 +30,7 @@ export const CORE_CONFIG_DEFAULTS: CoreConfigFields = {
   mqtt_tls_cert_file: "",
   mqtt_tls_key_file: "",
   mqtt_topics: [],
-  ring_topic: "ring/pressed",
+  ring_topic: "ring/+/pressed/#",
   notification_success_sound_path: "/usr/local/share/chime/test.wav",
   notification_failure_sound_path: "/usr/local/share/chime/ring.wav",
   volume_ring: 80,

@@ -70,7 +70,7 @@ The datasheet rates 1.4 W at 1% THD+N into 8 Ω at 5 V. Settings above about 90 
 | Console | PL011 on pins 8 and 10 with Bluetooth disabled |
 | Audio | Playback-only I2S card through the `max98357a` overlay; no SD GPIO |
 | Volume | `volume_ring` and `volume_notifications` scale PCM; amplifier gain is fixed by the GAIN strap |
-| Ring subscription | Ring publishes `ring/<unit>/pressed/<n>`. `mqtt_topics` and `ring_topic` both need a matching filter, for example `ring/+/pressed/#`; the shipped default `ring/pressed` does not match. |
+| Ring subscription | Ring publishes `ring/<unit>/pressed/<n>`. The shipped `mqtt_topics` and `ring_topic` defaults match it through `ring/+/pressed/#`. |
 | Heartbeat | `heartbeat_topic`, default `chime/heartbeat`, reports `alive` or `degraded` |
 | Web | `chime-webd` on port 8443; see [chime/README.md](../../../../chime/README.md) |
 

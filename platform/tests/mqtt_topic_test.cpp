@@ -40,6 +40,8 @@ TEST_SUITE("mqtt_topic") {
             {"sport/tennis/#", "sport/tennis/player1/ranking", true},
             {"ring/2OG/#", "ring/2OG/pressed", true},
             {"ring/2OG/#", "ring/1OG/pressed", false},
+            {"ring/+/pressed/#", "ring/front/pressed/1", true},
+            {"ring/+/pressed/#", "ring/front/status", false},
 
             {"a//b", "a//b", true},
             {"a/+/b", "a//b", true},
