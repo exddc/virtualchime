@@ -137,8 +137,6 @@ run_container() {
     require_file /home/builder/webui-src/package.json
     require_file /home/builder/webui-src/bun.lock
     require_file /home/builder/webui-src/.source-id
-    require_file /home/builder/webui-src/vendor/node_modules.tar.gz
-    require_file /home/builder/webui-src/vendor/node_modules.tar.gz.sha256
     if [ -e /home/builder/webui-src/dist ] || [ -e /home/builder/webui-src/node_modules ]; then
         error "staged webui-src must not contain dist/ or node_modules/"
     fi

@@ -221,7 +221,7 @@ Chime (`board/raspberrypi0w/rootfs_overlay`):
 | `version.env` | OS/config version source of truth |
 | `../chime/VERSION` | Chime app SemVer source of truth |
 | `package/chime/chime.mk` | Chime CMake package recipe (source list lives in CMake) |
-| `package/chime-web-ui/chime-web-ui.mk` | Builds the Svelte UI from vendored deps and installs it into the rootfs |
+| `package/chime-web-ui/chime-web-ui.mk` | Installs locked Bun deps, builds the Svelte UI, and installs it into the rootfs |
 | `bun-version` | Pinned Bun version for the builder image and CI |
 | `bun-linux-x64.sha256` / `bun-linux-aarch64.sha256` | SHA-256 of the matching GitHub Bun zip |
 | `board/common/assert_chime_web_ui_dist.sh` | Fails the image build if `index.html` or referenced assets are missing |
@@ -266,18 +266,17 @@ must not depend on `scripts/deploy.sh`.
 `scripts/docker_build.sh` stages `webui/` (no host `dist/` or `node_modules/`)
 into `/home/builder/webui-src` and writes `.source-id` from that tree. The
 Buildroot package `chime-web-ui` uses `.source-id` as its package version, so a
-source or vendor change rebuilds without `dirclean`. It verifies
-`webui/vendor/node_modules.tar.gz`, extracts it, runs `bun run build` offline,
-and installs the bundle. `post_build.sh` fails the image if `index.html` or a
-referenced asset is missing.
+source or `bun.lock` change rebuilds without `dirclean`. It runs
+`bun install --frozen-lockfile`, then `bun run build`, and installs the bundle.
+`post_build.sh` fails the image if `index.html` or a referenced asset is
+missing.
 
-The vendor archive is a Linux `node_modules` tree for both builder arches
-(x64 and arm64), not the maintainer host install. Regenerating it after
-`webui/bun.lock` changes:
-
-```bash
-./scripts/vendor_webui_deps.sh
-```
+Bun checks each package against the integrity hash in `bun.lock` and caches it
+in `dl/chime-web-ui/bun-cache`. Only a completed `chime-web-ui` build fills that
+cache; `make source` does not. After one online build, later builds that reuse
+the same `dl/` directory (the Docker cache volume) install from the cache
+without network access. To clear the cache, delete `dl/chime-web-ui/bun-cache`
+or run `docker_build.sh --clear-docker-cache`.
 
 The HTML fallback in `chime/src/webd/ui_assets.cpp` is a diagnostic for a missing
 or broken dist directory on a running device. It is not an acceptable default for

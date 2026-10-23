@@ -30,7 +30,7 @@ buildroot/output/
 buildroot/build_meta.env
 
 # Local web UI artifacts
-webui/node_modules/
+node_modules/
 webui/dist/
 
 # WireViz extras (commit wiring*.yml and wiring*.svg only)
