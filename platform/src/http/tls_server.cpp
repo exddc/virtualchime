@@ -27,6 +27,7 @@
 #include <openssl/pem.h>
 #include <openssl/ssl.h>
 #include <openssl/x509.h>
+#include <openssl/x509v3.h>
 
 #include "oc/http/http.h"
 #include "oc/http/json_http.h"
@@ -46,6 +47,33 @@ bool WriteAllSsl(SSL *ssl, const std::string &data) {
         offset += static_cast<std::size_t>(written);
     }
     return true;
+}
+
+std::string SubjectText(X509 *cert, int nid) {
+    char text[256] = {};
+    if (X509_NAME_get_text_by_NID(X509_get_subject_name(cert), nid, text, sizeof(text)) < 0) {
+        return {};
+    }
+    return text;
+}
+
+// True for a certificate this server generated (self-signed, same organization) whose CN differs from common_name.
+bool IsStaleGeneratedCertificate(const std::string &cert_path, const std::string &organization,
+                                 const std::string &common_name) {
+    FILE *file = std::fopen(cert_path.c_str(), "r");
+    if (file == nullptr) {
+        return false;
+    }
+    X509 *cert = PEM_read_X509(file, nullptr, nullptr, nullptr);
+    std::fclose(file);
+    if (cert == nullptr) {
+        return false;
+    }
+    const bool stale = X509_check_issued(cert, cert) == X509_V_OK &&
+                       SubjectText(cert, NID_organizationName) == organization &&
+                       SubjectText(cert, NID_commonName) != common_name;
+    X509_free(cert);
+    return stale;
 }
 
 bool GenerateSelfSignedCertificate(const std::string &cert_path, const std::string &key_path,
@@ -556,7 +584,10 @@ bool TlsServer::EnsureTlsMaterial(std::string *error) const {
     const bool cert_exists = std::filesystem::exists(config_.cert_path);
     const bool key_exists = std::filesystem::exists(config_.key_path);
     if (cert_exists && key_exists) {
-        return true;
+        if (!IsStaleGeneratedCertificate(config_.cert_path, config_.cert_organization, config_.cert_common_name)) {
+            return true;
+        }
+        logger_.Info(config_.log_component, "regenerating TLS certificate for CN " + config_.cert_common_name);
     }
 
     std::error_code ec;

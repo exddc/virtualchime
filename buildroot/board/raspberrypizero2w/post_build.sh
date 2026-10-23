@@ -17,10 +17,7 @@ oc_require_executables \
     etc/init.d/S11modules \
     etc/init.d/S16powerlog \
     etc/init.d/S45webd
-oc_fix_ssh_permissions
-
-# S41timesync owns clock sync; the ntp package's daemon would fight its ntpd -q.
-rm -f "${TARGET_DIR}/etc/init.d/S49ntp"
+oc_common_post_build
 
 FIRMWARE_DIR="${TARGET_DIR}/lib/firmware/brcm"
 for chip in 43436 43436s; do
@@ -57,9 +54,6 @@ if [ -f "$WPA_CONF" ] && [ ! -L "$WPA_CONF" ]; then
     chmod 600 "${FACTORY_DIR}/wpa_supplicant.conf"
 fi
 ln -sfn /etc/persistent/wpa_supplicant.conf "$WPA_CONF"
-
-rm -rf "${TARGET_DIR}/etc/dropbear"
-ln -sfn /etc/persistent/dropbear "${TARGET_DIR}/etc/dropbear"
 
 oc_write_release ring usr/local/share/openchime/factory/ring.conf
 

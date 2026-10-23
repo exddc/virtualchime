@@ -45,13 +45,13 @@ chime/VERSION
 
 `buildroot/version.env`
 ```bash
-OPENCHIME_OS_VERSION=0.3.0
-CHIME_CONFIG_VERSION=6
+OPENCHIME_OS_VERSION=<x.y.z>
+CHIME_CONFIG_VERSION=<n>
 ```
 
 `chime/VERSION`
 ```bash
-1.0.0
+<x.y.z>
 ```
 
 - `OPENCHIME_OS_VERSION`: bump when you build/flash a new OS image. Chime and Ring share it.
@@ -195,7 +195,7 @@ Shared (`board/common/rootfs_overlay`, applied first):
 | `etc/init.d/S41timesync` | Syncs system clock from NTP and keeps periodic resync running; `/etc/default/timesync` may set `CONFIG_FILE` and `LOGFILE` |
 | `etc/init.d/S42otaguard` | Tracks pending OTA boot attempts and triggers rollback when exhausted |
 | `etc/init.d/S45webd` | `chime-webd` supervisor; `/etc/default/chime-webd` may set `LOGFILE` and export `CHIME_WEBD_*` overrides |
-| `etc/init.d/S50dropbear` | SSH daemon (key-only auth) |
+| `etc/init.d/S50dropbear` | SSH daemon (key-only auth); host keys in `/data/etc/dropbear` survive OTA updates |
 | `usr/local/sbin/ota-*` | OTA install, confirm, and rollback |
 | `etc/wpa_supplicant/wpa_supplicant.conf` | WiFi credentials (gitignored) |
 | `root/.ssh/authorized_keys` | SSH public keys (gitignored) |
@@ -369,8 +369,9 @@ If `date` is still near 1970:
 - kmod (modprobe, depmod)
 - wpa_supplicant (WiFi)
 - dropbear (SSH)
-- dhcpcd, udhcpc (DHCP)
-- ntp/ntpd (clock synchronization)
+- udhcpc (DHCP)
+- ntp/ntpd (clock synchronization, run by `S41timesync`)
+- mosquitto client library and `mosquitto_pub`/`mosquitto_sub` (no broker)
 - iw (WiFi debug)
 - brcmfmac firmware (Pi Zero W WiFi)
 - chime and chime-webd
@@ -386,7 +387,7 @@ If `date` is still near 1970:
 ssh root@ring.local
 ```
 
-Packages beyond the Chime base: libcamera with the rpi/vc4 pipeline and libcamera-apps, BlueZ (`bluetoothd`, `bluetoothctl`, `btmon`), libgpiod tools, and alsa-utils (`aplay`, `arecord`, `amixer`, `speaker-test`). `dhcpcd` and the Mosquitto broker are left out; `udhcpc` handles DHCP.
+Packages beyond the Chime base: libcamera with the rpi/vc4 pipeline and libcamera-apps, BlueZ (`bluetoothd`, `bluetoothctl`, `btmon`), libgpiod tools, and alsa-utils (`aplay`, `arecord`, `amixer`, `speaker-test`).
 
 The build output goes to `buildroot/output/ring/` and to `output-ring/` in the Docker cache volume, so Chime and Ring builds do not overwrite each other.
 
@@ -395,11 +396,8 @@ The build output goes to `buildroot/output/ring/` and to `output-ring/` in the D
 | Area | Ring | Chime |
 |------|------|-------|
 | Root filesystem | Read-only. Logs in RAM (`/var/log` is `/tmp`). | Remounted read-write at boot |
-| Mutable state | `/data` only, through `/etc/persistent` bind mount and build-time symlinks | Symlinks rewritten on rootfs at every boot |
+| Mutable state | `/data` only, through `/etc/persistent` bind mount and build-time symlinks | Config symlinks rewritten on rootfs at every boot; `/etc/dropbear` symlink set at build time |
 | Kernel modules | `kmod` with xz support; `mdev` loads drivers by modalias | `S30modules` decompresses modules on first boot |
-| SSH host keys | `/data/etc/dropbear`; survive OTA slot switches | Rootfs; change after an OTA update |
-| Time sync | `S41timesync` only; `S49ntp` is removed | `S41timesync` and `S49ntp` both run `ntpd` |
-| MQTT | `libmosquitto` only, no broker | Package default also installs the broker |
 | Bluetooth | Enabled on the PL011 (`krnbt`), `bluetoothd`, `bluetoothctl`, `btmon` | Disabled |
 | Serial console | `ttyS0` (mini-UART), 115200 | `ttyS0`, 115200 |
 | Watchdog | BusyBox `watchdog` services `/dev/watchdog` every 5 s | None |

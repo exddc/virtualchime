@@ -120,6 +120,7 @@ Do not delete `/data/var/lib/chime/` as a whole; that directory also holds obser
 | --- | --- |
 | `/data/etc/chime.conf` | `/etc/chime.conf` → `/etc/persistent/chime.conf` |
 | `/data/etc/wpa_supplicant.conf` | `/etc/wpa_supplicant/wpa_supplicant.conf` → `/etc/persistent/wpa_supplicant.conf` |
+| `/data/etc/dropbear/` | `/etc/dropbear` → `/etc/persistent/dropbear` (SSH host keys, symlink set at build time) |
 | `/data/var/lib/chime/` | `/var/lib/chime/` (observed topics, uploaded ring sounds, `/auth` verifier, `config.fatal`) |
 | `/data/ota/` | OTA pending/status (not bind-mounted) |
 

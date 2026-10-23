@@ -11,7 +11,7 @@ TARGET_DIR="$1"
 oc_assert_web_ui_dist
 oc_chmod_binaries chime chime-webd
 oc_require_ota_scripts
-oc_fix_ssh_permissions
+oc_common_post_build
 
 # Create firmware symlink for Pi Zero W WiFi
 FIRMWARE_DIR="${TARGET_DIR}/lib/firmware/brcm"

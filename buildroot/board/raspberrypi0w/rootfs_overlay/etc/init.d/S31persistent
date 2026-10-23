@@ -38,7 +38,8 @@ install_persistent_link() {
 start() {
     printf "Starting persistent overlay: "
 
-    mkdir -p /data/etc /data/var/lib/chime /data/ota /etc/persistent
+    mkdir -p /data/etc/dropbear /data/var/lib/chime /data/ota /etc/persistent
+    chmod 700 /data/etc/dropbear
     copy_if_missing /etc/chime.conf /data/etc/chime.conf
     copy_if_missing /etc/wpa_supplicant/wpa_supplicant.conf /data/etc/wpa_supplicant.conf
 

@@ -33,7 +33,7 @@ start() {
     fi
 
     mkdir -p /data/etc/dropbear /data/var/lib/ring /data/var/lib/bluetooth /data/var/log /data/ota
-    chmod 700 /data/var/lib/bluetooth
+    chmod 700 /data/etc/dropbear /data/var/lib/bluetooth
     copy_if_missing "$FACTORY_DIR/ring.conf" /data/etc/ring.conf
     copy_if_missing "$FACTORY_DIR/wpa_supplicant.conf" /data/etc/wpa_supplicant.conf
 

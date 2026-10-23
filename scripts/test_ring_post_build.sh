@@ -26,6 +26,7 @@ seed_target() {
     rm -f "$target/etc/wpa_supplicant/wpa_supplicant.conf" "$target/root/.ssh/authorized_keys"
     printf 'network={}\n' > "$target/etc/wpa_supplicant/wpa_supplicant.conf"
     mkdir -p "$target/usr/local/bin" "$target/lib/firmware/brcm" "$target/etc/dropbear"
+    : > "$target/etc/dropbear/dropbear_ed25519_host_key"
     for bin in chime chime-webd chime-migrate; do
         printf '#!/bin/sh\n' > "$target/usr/local/bin/$bin"
     done

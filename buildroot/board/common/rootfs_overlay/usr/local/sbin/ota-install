@@ -9,6 +9,16 @@ Usage: ota-install --image <rootfs.ext4|-> --sha256 <hex> --version <os-version>
 EOF
 }
 
+carry_over_ssh_host_keys() {
+    [ -d /etc/dropbear ] && [ ! -L /etc/dropbear ] || return 0
+    mkdir -p /data/etc/dropbear
+    chmod 700 /data/etc/dropbear
+    for key in /etc/dropbear/dropbear_*_host_key; do
+        [ -f "$key" ] || continue
+        [ -e "/data/etc/dropbear/${key##*/}" ] || cp -p "$key" /data/etc/dropbear/
+    done
+}
+
 IMAGE_PATH=""
 EXPECTED_SHA256=""
 FW_VERSION=""
@@ -107,6 +117,8 @@ if [ "$ACTUAL_TARGET_SHA256" != "$EXPECTED_SHA256" ]; then
     set_env_kv "$OTA_STATUS_FILE" LAST_ERROR "target_sha256_mismatch"
     exit 1
 fi
+
+carry_over_ssh_host_keys || ota_log "could not copy SSH host keys to /data/etc/dropbear"
 
 write_pending_state "$TARGET_SLOT" "$PREVIOUS_SLOT" "$FW_VERSION" "$EXPECTED_SHA256" "$(utc_now)" "$OTA_MAX_ATTEMPTS"
 set_env_kv "$OTA_STATUS_FILE" LAST_RESULT "install_staged"
